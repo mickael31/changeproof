@@ -1,0 +1,806 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "ChangeProof AI API",
+    "description": "API de traçabilité et documentation automatisée par IA. SaaS B2B multi-tenant.",
+    "version": "0.1.0",
+    "contact": {
+      "name": "ChangeProof AI",
+      "url": "https://changeproof.ai"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "API locale (Next.js App Router)"
+    }
+  ],
+  "security": [
+    {
+      "cookieAuth": []
+    }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Authentification" },
+    { "name": "Projects", "description": "Gestion des projets" },
+    { "name": "Changes", "description": "Gestion des changements" },
+    { "name": "Documents", "description": "Gestion des documents" },
+    { "name": "AI", "description": "Intelligence Artificielle" },
+    { "name": "Search", "description": "Recherche" },
+    { "name": "Health", "description": "État du service" }
+  ],
+  "paths": {
+    "/auth/callback/credentials": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Connexion par credentials",
+        "description": "Authentifie un utilisateur avec email et mot de passe.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "user@example.com" },
+                  "password": { "type": "string", "format": "password", "minLength": 8, "example": "••••••••" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authentification réussie",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": { "type": "string", "description": "URL de redirection après connexion" }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identifiants invalides",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } }
+          }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Lister les projets",
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["ACTIVE", "DRAFT", "ARCHIVED"] } },
+          { "name": "criticality", "in": "query", "schema": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] } },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Recherche dans le nom et la description" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 100 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0, "minimum": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste paginée des projets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Project" } },
+                    "total": { "type": "integer" },
+                    "limit": { "type": "integer" },
+                    "offset": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Non authentifié" },
+          "500": { "description": "Erreur serveur" }
+        }
+      },
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Créer un projet",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 1, "maxLength": 200, "example": "Mon Projet" },
+                  "description": { "type": "string", "maxLength": 2000 },
+                  "domain": { "type": "string", "maxLength": 200 },
+                  "repositoryUrl": { "type": "string", "format": "uri", "maxLength": 500 },
+                  "jiraProject": { "type": "string", "maxLength": 200 },
+                  "confluenceSpace": { "type": "string", "maxLength": 200 },
+                  "criticality": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+                  "status": { "type": "string", "enum": ["ACTIVE", "DRAFT", "ARCHIVED"] },
+                  "teamId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Projet créé",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Project" } } } } }
+          },
+          "401": { "description": "Non authentifié" },
+          "422": { "description": "Données invalides" },
+          "500": { "description": "Erreur serveur" }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "Obtenir un projet",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Détails du projet", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Project" } } } },
+          "404": { "description": "Projet introuvable" }
+        }
+      },
+      "patch": {
+        "tags": ["Projects"],
+        "summary": "Mettre à jour un projet",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "maxLength": 200 },
+                  "description": { "type": "string", "maxLength": 2000 },
+                  "status": { "type": "string", "enum": ["ACTIVE", "DRAFT", "ARCHIVED"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Projet mis à jour" },
+          "404": { "description": "Projet introuvable" }
+        }
+      },
+      "delete": {
+        "tags": ["Projects"],
+        "summary": "Supprimer un projet",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Projet supprimé" },
+          "404": { "description": "Projet introuvable" }
+        }
+      }
+    },
+    "/changes": {
+      "get": {
+        "tags": ["Changes"],
+        "summary": "Lister les changements",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "source", "in": "query", "schema": { "type": "string", "enum": ["MANUAL", "JIRA", "GITHUB", "GITLAB", "CONFLUENCE"] } },
+          { "name": "project", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["PENDING", "RUNNING", "COMPLETED", "FAILED", "NEEDS_REVIEW", "VALIDATED", "REJECTED"] } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "maximum": 200 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste paginée des changements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changes": { "type": "array", "items": { "$ref": "#/components/schemas/Change" } },
+                    "total": { "type": "integer" },
+                    "offset": { "type": "integer" },
+                    "limit": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Non autorisé" },
+          "500": { "description": "Erreur serveur" }
+        }
+      },
+      "post": {
+        "tags": ["Changes"],
+        "summary": "Créer un changement",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "source", "projectId"],
+                "properties": {
+                  "title": { "type": "string", "minLength": 1, "maxLength": 500, "example": "Mise à jour du module d'authentification" },
+                  "description": { "type": "string", "maxLength": 10000 },
+                  "source": { "type": "string", "enum": ["MANUAL", "JIRA", "GITHUB", "GITLAB", "CONFLUENCE"] },
+                  "projectId": { "type": "string" },
+                  "rawContent": { "type": "string", "maxLength": 50000 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Changement créé", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Change" } } } },
+          "400": { "description": "Champs requis manquants ou source invalide" },
+          "401": { "description": "Non autorisé" },
+          "404": { "description": "Projet introuvable" },
+          "500": { "description": "Erreur serveur" }
+        }
+      }
+    },
+    "/changes/{id}": {
+      "get": {
+        "tags": ["Changes"],
+        "summary": "Obtenir un changement",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Détails du changement", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Change" } } } },
+          "404": { "description": "Changement introuvable" }
+        }
+      },
+      "patch": {
+        "tags": ["Changes"],
+        "summary": "Mettre à jour un changement",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Changement mis à jour" },
+          "404": { "description": "Changement introuvable" }
+        }
+      },
+      "delete": {
+        "tags": ["Changes"],
+        "summary": "Supprimer un changement",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Changement supprimé" },
+          "404": { "description": "Changement introuvable" }
+        }
+      }
+    },
+    "/documents": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Lister les documents",
+        "parameters": [
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["FUNCTIONAL_SPEC", "TECHNICAL_SPEC", "RELEASE_NOTE", "IMPACT_SHEET", "OPERATIONAL_PROCEDURE", "PO_VALIDATION", "TECH_LEAD_VALIDATION", "AUDIT_SHEET", "TEAMS_SUMMARY", "CONFLUENCE_SUMMARY", "API_DOC", "SECURITY_REPORT"] } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["DRAFT", "IN_REVIEW", "VALIDATED", "REJECTED", "PUBLISHED", "OBSOLETE"] } },
+          { "name": "projectId", "in": "query", "schema": { "type": "string" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 100 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste paginée des documents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Document" } },
+                    "total": { "type": "integer" },
+                    "limit": { "type": "integer" },
+                    "offset": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Non autorisé" }
+        }
+      },
+      "post": {
+        "tags": ["Documents"],
+        "summary": "Créer un document",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "type", "content", "projectId"],
+                "properties": {
+                  "title": { "type": "string", "example": "Spécification fonctionnelle - Module Auth" },
+                  "type": { "type": "string", "enum": ["FUNCTIONAL_SPEC", "TECHNICAL_SPEC", "RELEASE_NOTE", "IMPACT_SHEET", "OPERATIONAL_PROCEDURE", "PO_VALIDATION", "TECH_LEAD_VALIDATION", "AUDIT_SHEET", "TEAMS_SUMMARY", "CONFLUENCE_SUMMARY", "API_DOC", "SECURITY_REPORT"] },
+                  "content": { "type": "string", "description": "Contenu du document (Markdown/texte)" },
+                  "projectId": { "type": "string" },
+                  "changeId": { "type": "string", "description": "ID du changement associé (optionnel)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Document créé", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Document" } } } } } },
+          "400": { "description": "Champs requis manquants" },
+          "401": { "description": "Non autorisé" }
+        }
+      }
+    },
+    "/documents/{id}": {
+      "get": {
+        "tags": ["Documents"],
+        "summary": "Obtenir un document",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Détails du document", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Document" } } } },
+          "404": { "description": "Document introuvable" }
+        }
+      },
+      "patch": {
+        "tags": ["Documents"],
+        "summary": "Mettre à jour un document",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "content": { "type": "string" },
+                  "status": { "type": "string", "enum": ["DRAFT", "IN_REVIEW", "VALIDATED", "REJECTED", "PUBLISHED", "OBSOLETE"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Document mis à jour" },
+          "404": { "description": "Document introuvable" }
+        }
+      },
+      "delete": {
+        "tags": ["Documents"],
+        "summary": "Supprimer un document",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Document supprimé" },
+          "404": { "description": "Document introuvable" }
+        }
+      }
+    },
+    "/ai/analyze": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Analyser un changement avec l'IA",
+        "description": "Lance une analyse IA structurée sur un changement (ticket JIRA, PR, diff git, etc.). L'IA retourne un résumé, les impacts, les risques et les documents à mettre à jour.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "jiraTicket": { "type": "string", "description": "ID ou description du ticket JIRA" },
+                  "functionalDescription": { "type": "string", "description": "Description fonctionnelle du changement" },
+                  "pullRequest": { "type": "string", "description": "URL ou contenu de la Pull Request" },
+                  "gitDiff": { "type": "string", "description": "Diff git du changement" },
+                  "modifiedFiles": { "type": "string", "description": "Liste des fichiers modifiés" },
+                  "oldDocumentation": { "type": "string", "description": "Ancienne documentation de référence" },
+                  "newDocumentation": { "type": "string", "description": "Nouvelle documentation proposée" },
+                  "developerComments": { "type": "string", "description": "Commentaires du développeur" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Analyse IA réussie",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AIStructuredResult" }
+              }
+            }
+          },
+          "400": { "description": "Aucun champ rempli ou contenu bloqué par le filtre de sécurité" },
+          "401": { "description": "Non autorisé" },
+          "500": { "description": "Erreur lors de l'analyse IA" }
+        }
+      }
+    },
+    "/ai/provider": {
+      "get": {
+        "tags": ["AI"],
+        "summary": "Lister les providers IA",
+        "description": "Retourne tous les providers IA configurés pour l'organisation (sans les clés API).",
+        "responses": {
+          "200": {
+            "description": "Liste des providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/AIProvider" } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Non autorisé" }
+        }
+      },
+      "post": {
+        "tags": ["AI"],
+        "summary": "Ajouter un provider IA",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AIProviderCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Provider créé", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/AIProvider" } } } } } },
+          "400": { "description": "Validation échouée" },
+          "401": { "description": "Non autorisé" },
+          "500": { "description": "Erreur serveur" }
+        }
+      },
+      "patch": {
+        "tags": ["AI"],
+        "summary": "Mettre à jour un provider IA",
+        "parameters": [
+          { "name": "testConnection", "in": "query", "schema": { "type": "boolean" }, "description": "Si true, teste la connexion au lieu de mettre à jour" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AIProviderUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Provider mis à jour" },
+          "400": { "description": "Validation échouée" },
+          "401": { "description": "Non autorisé" },
+          "404": { "description": "Provider introuvable" }
+        }
+      },
+      "delete": {
+        "tags": ["AI"],
+        "summary": "Supprimer un provider IA",
+        "parameters": [
+          { "name": "id", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Provider supprimé" },
+          "400": { "description": "ID requis" },
+          "401": { "description": "Non autorisé" },
+          "404": { "description": "Provider introuvable" }
+        }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": ["Search"],
+        "summary": "Recherche globale",
+        "description": "Recherche dans les titres et descriptions des changements, documents et tickets.",
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string", "minLength": 1, "maxLength": 500 }, "description": "Terme de recherche" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Résultats de recherche",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "result": { "$ref": "#/components/schemas/SearchResult" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Paramètre 'q' requis" },
+          "401": { "description": "Non autorisé" }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Vérifier l'état du service",
+        "description": "Vérifie la connectivité base de données et IA. Retourne ok, degraded ou error.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service opérationnel (ok ou degraded)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "enum": ["ok", "degraded", "error"] },
+                    "db": { "type": "boolean" },
+                    "ai": { "type": "boolean" },
+                    "uptime": { "type": "integer", "description": "Uptime en secondes" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service en erreur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "error" },
+                    "db": { "type": "boolean" },
+                    "ai": { "type": "boolean" },
+                    "uptime": { "type": "integer" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "next-auth.session-token",
+        "description": "Cookie de session Next-Auth"
+      }
+    },
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": { "type": "string", "example": "Non autorisé" },
+          "details": { "type": "object", "description": "Détails de validation (optionnel)" }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "required": ["id", "name", "criticality", "status", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string", "example": "ChangeProof AI" },
+          "description": { "type": "string", "nullable": true },
+          "domain": { "type": "string", "nullable": true },
+          "repositoryUrl": { "type": "string", "nullable": true },
+          "jiraProject": { "type": "string", "nullable": true },
+          "confluenceSpace": { "type": "string", "nullable": true },
+          "criticality": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+          "status": { "type": "string", "enum": ["ACTIVE", "DRAFT", "ARCHIVED"] },
+          "orgId": { "type": "string" },
+          "teamId": { "type": "string", "nullable": true },
+          "team": { "type": "object", "nullable": true },
+          "_count": {
+            "type": "object",
+            "properties": {
+              "changes": { "type": "integer" },
+              "documents": { "type": "integer" }
+            }
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Change": {
+        "type": "object",
+        "required": ["id", "source", "title", "projectId", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "source": { "type": "string", "enum": ["MANUAL", "JIRA", "GITHUB", "GITLAB", "CONFLUENCE"] },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "rawContent": { "type": "string", "nullable": true },
+          "projectId": { "type": "string" },
+          "project": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
+          "createdBy": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "email": { "type": "string" } } },
+          "analyses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "status": { "type": "string" },
+                "confidence": { "type": "number" }
+              }
+            }
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Document": {
+        "type": "object",
+        "required": ["id", "title", "type", "content", "status", "projectId", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "type": { "type": "string", "enum": ["FUNCTIONAL_SPEC", "TECHNICAL_SPEC", "RELEASE_NOTE", "IMPACT_SHEET", "OPERATIONAL_PROCEDURE", "PO_VALIDATION", "TECH_LEAD_VALIDATION", "AUDIT_SHEET", "TEAMS_SUMMARY", "CONFLUENCE_SUMMARY", "API_DOC", "SECURITY_REPORT"] },
+          "content": { "type": "string" },
+          "status": { "type": "string", "enum": ["DRAFT", "IN_REVIEW", "VALIDATED", "REJECTED", "PUBLISHED", "OBSOLETE"] },
+          "confidence": { "type": "number", "nullable": true },
+          "projectId": { "type": "string" },
+          "project": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
+          "changeId": { "type": "string", "nullable": true },
+          "generatedBy": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
+          "validatedBy": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
+          "validatedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "publishedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AIProvider": {
+        "type": "object",
+        "required": ["id", "name", "type", "baseUrl", "defaultModel", "isActive", "createdAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "type": "string", "example": "openai_compatible" },
+          "baseUrl": { "type": "string", "format": "uri" },
+          "defaultModel": { "type": "string", "example": "mistral-medium" },
+          "embeddingModel": { "type": "string", "nullable": true },
+          "timeout": { "type": "integer" },
+          "maxTokens": { "type": "integer" },
+          "temperature": { "type": "number" },
+          "streaming": { "type": "boolean" },
+          "jsonMode": { "type": "boolean" },
+          "toolCalling": { "type": "boolean" },
+          "isActive": { "type": "boolean" },
+          "lastTestAt": { "type": "string", "format": "date-time", "nullable": true },
+          "lastTestSuccess": { "type": "boolean", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AIProviderCreate": {
+        "type": "object",
+        "required": ["name", "baseUrl", "apiKey", "defaultModel"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "type": { "type": "string", "default": "openai_compatible" },
+          "baseUrl": { "type": "string", "format": "uri" },
+          "apiKey": { "type": "string", "minLength": 10, "maxLength": 512, "description": "Clé API (chiffrée côté serveur)" },
+          "defaultModel": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "embeddingModel": { "type": "string", "maxLength": 100 },
+          "timeout": { "type": "integer", "minimum": 1000, "maximum": 300000, "default": 60000 },
+          "maxTokens": { "type": "integer", "minimum": 100, "maximum": 128000, "default": 4096 },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2, "default": 0.3 },
+          "streaming": { "type": "boolean", "default": false },
+          "jsonMode": { "type": "boolean", "default": true },
+          "toolCalling": { "type": "boolean", "default": false },
+          "isActive": { "type": "boolean", "default": true }
+        }
+      },
+      "AIProviderUpdate": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "description": "ID du provider à mettre à jour" },
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "baseUrl": { "type": "string", "format": "uri" },
+          "apiKey": { "type": "string", "description": "Nouvelle clé API (optionnelle)" },
+          "defaultModel": { "type": "string" },
+          "embeddingModel": { "type": "string" },
+          "timeout": { "type": "integer" },
+          "maxTokens": { "type": "integer" },
+          "temperature": { "type": "number" },
+          "streaming": { "type": "boolean" },
+          "jsonMode": { "type": "boolean" },
+          "toolCalling": { "type": "boolean" },
+          "isActive": { "type": "boolean" }
+        }
+      },
+      "AIStructuredResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "globalSummary": { "type": "string", "description": "Résumé global du changement" },
+          "businessSummary": { "type": "string", "description": "Résumé métier" },
+          "technicalSummary": { "type": "string", "description": "Résumé technique" },
+          "impactedComponents": { "type": "array", "items": { "type": "string" } },
+          "impactedApis": { "type": "array", "items": { "type": "string" } },
+          "impactedScreens": { "type": "array", "items": { "type": "string" } },
+          "impactedUserRoles": { "type": "array", "items": { "type": "string" } },
+          "impactedData": { "type": "array", "items": { "type": "string" } },
+          "impactedConfig": { "type": "array", "items": { "type": "string" } },
+          "impactedSecurity": { "type": "array", "items": { "type": "string" } },
+          "externalDependencies": { "type": "array", "items": { "type": "string" } },
+          "functionalRisk": { "type": "object", "properties": { "level": { "type": "string" }, "description": { "type": "string" } } },
+          "technicalRisk": { "type": "object", "properties": { "level": { "type": "string" }, "description": { "type": "string" } } },
+          "securityRisk": { "type": "object", "properties": { "level": { "type": "string" }, "description": { "type": "string" } } },
+          "operationalRisk": { "type": "object", "properties": { "level": { "type": "string" }, "description": { "type": "string" } } },
+          "confidenceLevel": { "type": "number" },
+          "confirmed": { "type": "array", "items": { "type": "string" } },
+          "probable": { "type": "array", "items": { "type": "string" } },
+          "unproven": { "type": "array", "items": { "type": "string" } },
+          "missingInfo": { "type": "array", "items": { "type": "string" } },
+          "questionsToAsk": { "type": "array", "items": { "type": "string" } },
+          "documentsToUpdate": { "type": "array", "items": { "type": "string" } },
+          "finalRecommendation": { "type": "string" }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "properties": {
+          "summary": { "type": "string" },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "id": { "type": "string" },
+                "title": { "type": "string" }
+              }
+            }
+          },
+          "tickets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "id": { "type": "string" }, "title": { "type": "string" } }
+            }
+          },
+          "commits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "id": { "type": "string" }, "message": { "type": "string" } }
+            }
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "id": { "type": "string" }, "title": { "type": "string" } }
+            }
+          },
+          "confidence": { "type": "number" }
+        }
+      }
+    }
+  }
+}

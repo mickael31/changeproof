@@ -1,0 +1,887 @@
+// ─────────────────────────────────────
+// ChangeProof AI — Schéma Prisma
+// SaaS B2B multi-tenant de traçabilité
+// ─────────────────────────────────────
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ═══════════════════════════════════
+// UTILISATEURS & ORGANISATIONS
+// ═══════════════════════════════════
+
+enum UserRole {
+  ADMIN
+  SCRUM_MASTER
+  PRODUCT_OWNER
+  TECH_LEAD
+  DEVELOPER
+  AUDITOR
+}
+
+model User {
+  id             String       @id @default(cuid())
+  name           String?
+  email          String       @unique
+  emailVerified  DateTime?
+  image          String?
+  passwordHash   String?
+  role           UserRole     @default(DEVELOPER)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  teamId         String?
+  team           Team?        @relation(fields: [teamId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  accounts           Account[]
+  sessions           Session[]
+  validations        Validation[]
+  comments           Comment[]
+  notifications      Notification[]
+  createdChanges     Change[]          @relation("ChangeCreator")
+  generatedDocuments Document[]        @relation("DocGenerator")
+  documentsValidated Document[]        @relation("DocumentValidator")
+  documentVersions   DocumentVersion[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  ssoDomain String?  @unique
+  plan      String   @default("free")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  teams              Team[]
+  projects           Project[]
+  integrations       Integration[]
+  syncSchedules      SyncSchedule[]
+  changes            Change[]
+  tickets            Ticket[]
+  documents          Document[]
+  aiAnalyses         AIAnalysis[]
+  inconsistencies    Inconsistency[]
+  auditEvidences     AuditEvidence[]
+  providerConfigs    AIProviderConfig[]
+  usageLogs          UsageLog[]
+  subscription       Subscription?
+  commits            Commit[]
+  pullRequests       PullRequest[]
+  jobs               Job[]
+  webhookEndpoints   WebhookEndpoint[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  promptTemplates    PromptTemplate[]
+  ciConfig           CiConfig?
+  workflowConfigs    WorkflowConfig[]
+  workflowExecutions WorkflowExecution[]
+
+  @@map("organizations")
+}
+
+model Team {
+  id             String       @id @default(cuid())
+  name           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  users    User[]
+  projects Project[]
+
+  @@map("teams")
+}
+
+// ═══════════════════════════════════
+// CONFIGURATION IA
+// ═══════════════════════════════════
+
+model AIProviderConfig {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  name            String
+  type            String       @default("openai_compatible")
+  baseUrl         String
+  encryptedApiKey String
+  defaultModel    String       @default("mistral-medium")
+  embeddingModel  String?
+  timeout         Int          @default(60000)
+  maxTokens       Int          @default(4096)
+  temperature     Float        @default(0.3)
+  streaming       Boolean      @default(false)
+  jsonMode        Boolean      @default(true)
+  toolCalling     Boolean      @default(false)
+  isActive        Boolean      @default(true)
+  lastTestAt      DateTime?
+  lastTestSuccess Boolean?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  analyses  AIAnalysis[]
+  usageLogs UsageLog[]
+
+  @@map("ai_provider_configs")
+}
+
+// ═══════════════════════════════════
+// PROJETS & INTÉGRATIONS
+// ═══════════════════════════════════
+
+enum Criticality {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  DRAFT
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  name            String
+  description     String?
+  domain          String?
+  repositoryUrl   String?
+  jiraProject     String?
+  confluenceSpace String?
+  criticality     Criticality   @default(MEDIUM)
+  status          ProjectStatus @default(ACTIVE)
+  orgId           String
+  organization    Organization  @relation(fields: [orgId], references: [id])
+  teamId          String?
+  team            Team?         @relation(fields: [teamId], references: [id])
+  docRules        Json?
+  auditRules      Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  changes            Change[]
+  tickets            Ticket[]
+  documents          Document[]
+  integrations       Integration[]
+  commits            Commit[]
+  pullRequests       PullRequest[]
+  workflowConfigs    WorkflowConfig[]
+  workflowExecutions WorkflowExecution[]
+
+  @@map("projects")
+}
+
+enum IntegrationType {
+  JIRA
+  GITHUB
+  GITLAB
+  CONFLUENCE
+  AZURE_DEVOPS
+  BITBUCKET
+  SHAREPOINT
+  TEAMS
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+  MOCKED
+}
+
+model Integration {
+  id           String            @id @default(cuid())
+  type         IntegrationType
+  name         String
+  status       IntegrationStatus @default(MOCKED)
+  config       Json?
+  projectId    String?
+  project      Project?          @relation(fields: [projectId], references: [id])
+  orgId        String
+  organization Organization      @relation(fields: [orgId], references: [id])
+  lastSyncAt   DateTime?
+  errorMessage String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  syncSchedules SyncSchedule[]
+
+  @@map("integrations")
+}
+
+model SyncSchedule {
+  id             String    @id @default(cuid())
+  orgId          String
+  integrationId  String
+  frequency      String // "never", "hourly", "daily", "weekly", "custom"
+  cronExpression String? // pour custom
+  isActive       Boolean   @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  integration  Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@index([integrationId])
+  @@map("sync_schedules")
+}
+
+// ═══════════════════════════════════
+// CHANGEMENTS
+// ═══════════════════════════════════
+
+enum ChangeSource {
+  MANUAL
+  JIRA
+  GITHUB
+  GITLAB
+  CONFLUENCE
+}
+
+model Change {
+  id           String       @id @default(cuid())
+  source       ChangeSource
+  title        String
+  description  String?
+  rawContent   String?
+  projectId    String
+  project      Project      @relation(fields: [projectId], references: [id])
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id])
+  createdById  String?
+  createdBy    User?        @relation("ChangeCreator", fields: [createdById], references: [id])
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  tickets         Ticket[]
+  pullRequests    PullRequest[]
+  commits         Commit[]
+  sourceFiles     SourceFile[]
+  documents       Document[]
+  analyses        AIAnalysis[]
+  inconsistencies Inconsistency[]
+  auditEvidences  AuditEvidence[]
+  comments        Comment[]
+
+  @@map("changes")
+}
+
+model Ticket {
+  id           String          @id @default(cuid())
+  externalId   String
+  title        String
+  description  String?
+  type         String?
+  status       String?
+  priority     String?
+  source       IntegrationType
+  changeId     String
+  change       Change          @relation(fields: [changeId], references: [id])
+  projectId    String
+  project      Project         @relation(fields: [projectId], references: [id])
+  orgId        String
+  organization Organization    @relation(fields: [orgId], references: [id])
+  createdAt    DateTime        @default(now())
+
+  @@map("tickets")
+}
+
+model PullRequest {
+  id           String       @id @default(cuid())
+  externalId   String
+  title        String
+  description  String?
+  sourceBranch String?
+  targetBranch String?
+  repo         String?
+  status       String?
+  changeId     String
+  change       Change       @relation(fields: [changeId], references: [id])
+  projectId    String
+  project      Project      @relation(fields: [projectId], references: [id])
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id])
+  createdAt    DateTime     @default(now())
+
+  @@map("pull_requests")
+}
+
+model Commit {
+  id           String       @id @default(cuid())
+  sha          String
+  message      String
+  author       String?
+  repo         String?
+  diff         String?
+  changeId     String
+  change       Change       @relation(fields: [changeId], references: [id])
+  projectId    String
+  project      Project      @relation(fields: [projectId], references: [id])
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id])
+  createdAt    DateTime     @default(now())
+
+  @@map("commits")
+}
+
+model SourceFile {
+  id        String   @id @default(cuid())
+  path      String
+  content   String?
+  changeId  String
+  change    Change   @relation(fields: [changeId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@map("source_files")
+}
+
+// ═══════════════════════════════════
+// ANALYSES IA
+// ═══════════════════════════════════
+
+enum AnalysisStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  NEEDS_REVIEW
+  VALIDATED
+  REJECTED
+}
+
+model AIAnalysis {
+  id               String            @id @default(cuid())
+  changeId         String
+  change           Change            @relation(fields: [changeId], references: [id])
+  status           AnalysisStatus    @default(PENDING)
+  prompt           String?
+  rawResult        String?
+  structuredResult Json?
+  confidence       Float?
+  providerConfigId String?
+  providerConfig   AIProviderConfig? @relation(fields: [providerConfigId], references: [id])
+  orgId            String
+  organization     Organization      @relation(fields: [orgId], references: [id])
+  errorMessage     String?
+  tokensUsed       Int?
+  duration         Int?
+  retryCount       Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  impacts Impact[]
+  risks   Risk[]
+
+  @@map("ai_analyses")
+}
+
+model Impact {
+  id          String     @id @default(cuid())
+  analysisId  String
+  analysis    AIAnalysis @relation(fields: [analysisId], references: [id])
+  type        String
+  description String
+  severity    String     @default("medium")
+  confidence  Float?
+
+  @@map("impacts")
+}
+
+model Risk {
+  id          String     @id @default(cuid())
+  analysisId  String
+  analysis    AIAnalysis @relation(fields: [analysisId], references: [id])
+  type        String
+  description String
+  level       String     @default("medium")
+  mitigation  String?
+
+  @@map("risks")
+}
+
+// ═══════════════════════════════════
+// DOCUMENTATION
+// ═══════════════════════════════════
+
+enum DocumentType {
+  FUNCTIONAL_SPEC
+  TECHNICAL_SPEC
+  RELEASE_NOTE
+  IMPACT_SHEET
+  OPERATIONAL_PROCEDURE
+  PO_VALIDATION
+  TECH_LEAD_VALIDATION
+  AUDIT_SHEET
+  TEAMS_SUMMARY
+  CONFLUENCE_SUMMARY
+  API_DOC
+  SECURITY_REPORT
+}
+
+enum DocumentStatus {
+  DRAFT
+  IN_REVIEW
+  VALIDATED
+  REJECTED
+  PUBLISHED
+  OBSOLETE
+}
+
+model Document {
+  id            String         @id @default(cuid())
+  title         String
+  type          DocumentType
+  content       String
+  status        DocumentStatus @default(DRAFT)
+  confidence    Float?
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id])
+  changeId      String?
+  change        Change?        @relation(fields: [changeId], references: [id])
+  orgId         String
+  organization  Organization   @relation(fields: [orgId], references: [id])
+  generatedById String?
+  generatedBy   User?          @relation("DocGenerator", fields: [generatedById], references: [id])
+  validatedById String?
+  validatedBy   User?          @relation("DocumentValidator", fields: [validatedById], references: [id])
+  validatedAt   DateTime?
+  publishedAt   DateTime?
+  sourcesUsed   Json?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  versions  DocumentVersion[]
+  comments  Comment[]
+  embedding DocumentEmbedding?
+
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id])
+  content     String
+  version     Int
+  comment     String?
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@map("document_versions")
+}
+
+// ═══════════════════════════════════
+// VALIDATION & AUDIT
+// ═══════════════════════════════════
+
+model Validation {
+  id         String   @id @default(cuid())
+  documentId String?
+  changeId   String?
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  status     String
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  @@map("validations")
+}
+
+model AuditEvidence {
+  id             String       @id @default(cuid())
+  changeId       String
+  change         Change       @relation(fields: [changeId], references: [id])
+  title          String
+  content        Json
+  validatedBy    String
+  validationDate DateTime
+  riskLevel      String
+  decisions      Json?
+  openQuestions  Json?
+  documentIds    String[]
+  orgId          String
+  organization   Organization @relation(fields: [orgId], references: [id])
+  exportJsonUrl  String?
+  exportPdfUrl   String?
+  createdAt      DateTime     @default(now())
+
+  @@map("audit_evidences")
+}
+
+model Notification {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id])
+  type         String // analysis_ready, document_ready, risk_alert, validation_request, sync_complete
+  title        String
+  message      String
+  link         String? // URL vers la ressource
+  read         Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+// ═══════════════════════════════════
+// PISTE D'AUDIT OPÉRATIONNELLE
+// ═══════════════════════════════════
+
+model AuditLog {
+  id           String       @id @default(cuid())
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id])
+  userId       String?
+  action       String // create, update, delete, login, logout, export, generate, analyze, validate, sync
+  entityType   String // Project, Change, Document, User, Integration, AIAnalysis, AuditEvidence, etc.
+  entityId     String?
+  changes      Json? // { before: ..., after: ... } ou description du changement
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime     @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Comment {
+  id         String    @id @default(cuid())
+  content    String
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  changeId   String?
+  change     Change?   @relation(fields: [changeId], references: [id])
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id])
+  createdAt  DateTime  @default(now())
+
+  @@map("comments")
+}
+
+// ═══════════════════════════════════
+// INCOHÉRENCES
+// ═══════════════════════════════════
+
+enum InconsistencySeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum InconsistencyStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+model Inconsistency {
+  id             String                @id @default(cuid())
+  title          String
+  description    String
+  severity       InconsistencySeverity @default(WARNING)
+  source         String
+  status         InconsistencyStatus   @default(OPEN)
+  recommendation String?
+  changeId       String?
+  change         Change?               @relation(fields: [changeId], references: [id])
+  orgId          String
+  organization   Organization          @relation(fields: [orgId], references: [id])
+  detectedAt     DateTime              @default(now())
+  resolvedAt     DateTime?
+  resolvedById   String?
+
+  @@map("inconsistencies")
+}
+
+// ═══════════════════════════════════
+// JOBS ASYNCHRONES
+// ═══════════════════════════════════
+
+enum JobType {
+  SYNC_INTEGRATION
+  ANALYZE_CHANGE
+  GENERATE_DOCUMENT
+  SEND_NOTIFICATION
+  CLEANUP
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Job {
+  id           String       @id @default(cuid())
+  type         JobType
+  status       JobStatus    @default(PENDING)
+  priority     Int          @default(0)
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id])
+  targetId     String? // ID de l'entité cible (integration, change, document...)
+  payload      Json? // Données supplémentaires
+  result       Json? // Résultat de l'exécution
+  errorMessage String?
+  retryCount   Int          @default(0)
+  maxRetries   Int          @default(3)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([orgId, status])
+  @@index([status, priority])
+  @@map("jobs")
+}
+
+// ═══════════════════════════════════
+// RECHERCHE VECTORIELLE
+// ═══════════════════════════════════
+
+model DocumentEmbedding {
+  id         String                      @id @default(cuid())
+  documentId String                      @unique
+  document   Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embedding  Unsupported("vector(1536)")
+  model      String                      @default("text-embedding-ada-002")
+  tokensUsed Int                         @default(0)
+  createdAt  DateTime                    @default(now())
+  updatedAt  DateTime                    @updatedAt
+
+  @@map("document_embeddings")
+}
+
+// ═══════════════════════════════════
+// WEBHOOKS SORTANTS
+// ═══════════════════════════════════
+
+model WebhookEndpoint {
+  id           String    @id @default(cuid())
+  orgId        String
+  url          String
+  secret       String
+  events       String[]
+  isActive     Boolean   @default(true)
+  lastDelivery DateTime?
+  createdAt    DateTime  @default(now())
+
+  deliveries   WebhookDelivery[]
+  organization Organization      @relation(fields: [orgId], references: [id])
+
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  endpointId String
+  event      String
+  payload    Json
+  status     Int
+  success    Boolean
+  error      String?
+  createdAt  DateTime @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+// ═══════════════════════════════════
+// ABONNEMENT & USAGE
+// ═══════════════════════════════════
+
+model Subscription {
+  id                   String       @id @default(cuid())
+  orgId                String       @unique
+  organization         Organization @relation(fields: [orgId], references: [id])
+  plan                 String
+  status               String       @default("active")
+  maxProjects          Int          @default(3)
+  maxUsers             Int          @default(5)
+  maxTokensPerDay      Int          @default(100000)
+  features             Json?
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean      @default(false)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@map("subscriptions")
+}
+
+model UsageLog {
+  id               String            @id @default(cuid())
+  orgId            String
+  organization     Organization      @relation(fields: [orgId], references: [id])
+  providerConfigId String?
+  providerConfig   AIProviderConfig? @relation(fields: [providerConfigId], references: [id])
+  userId           String?
+  requestType      String
+  tokensInput      Int               @default(0)
+  tokensOutput     Int               @default(0)
+  model            String?
+  success          Boolean           @default(true)
+  errorMessage     String?
+  createdAt        DateTime          @default(now())
+
+  @@index([orgId, createdAt])
+  @@map("usage_logs")
+}
+
+// ═══════════════════════════════════
+// CI/CD PIPELINE NATIF
+// ═══════════════════════════════════
+
+model CiConfig {
+  id                String       @id @default(cuid())
+  orgId             String       @unique
+  organization      Organization @relation(fields: [orgId], references: [id])
+  provider          String       @default("github") // "github" | "gitlab"
+  riskThreshold     Float        @default(0.7)
+  blockOnCritical   Boolean      @default(true)
+  enabled           Boolean      @default(false)
+  encryptedApiToken String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@map("ci_configs")
+}
+
+// ═══════════════════════════════════
+// TEMPLATES DE PROMPTS PERSONNALISABLES
+// ═══════════════════════════════════
+
+model PromptTemplate {
+  id           String   @id @default(cuid())
+  orgId        String
+  name         String // "Analyse standard", "Analyse sécurité", etc.
+  type         String // "analysis", "document_generation", "search"
+  systemPrompt String // Le prompt système personnalisé
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@map("prompt_templates")
+}
+
+// ═══════════════════════════════════
+// WORKFLOW ENGINE DE VALIDATION
+// ═══════════════════════════════════
+
+model WorkflowConfig {
+  id           String              @id @default(cuid())
+  orgId        String
+  organization Organization        @relation(fields: [orgId], references: [id])
+  projectId    String?
+  project      Project?            @relation(fields: [projectId], references: [id])
+  name         String
+  trigger      String // "on_change_created" | "on_analysis_completed" | "on_document_generated"
+  isActive     Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  steps        WorkflowStep[]
+  executions   WorkflowExecution[]
+
+  @@map("workflow_configs")
+}
+
+model WorkflowStep {
+  id            String         @id @default(cuid())
+  workflowId    String
+  workflow      WorkflowConfig @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  order         Int
+  role          UserRole // qui doit valider
+  action        String // "validate" | "review" | "approve"
+  deadlineHours Int?
+  escalateAfter Int? // heures avant escalade
+  escalateTo    UserRole? // rôle qui reçoit l'escalade
+
+  @@map("workflow_steps")
+}
+
+model WorkflowExecution {
+  id           String         @id @default(cuid())
+  workflowId   String
+  workflow     WorkflowConfig @relation(fields: [workflowId], references: [id])
+  targetType   String // "change" | "document" | "analysis"
+  targetId     String
+  currentStep  Int            @default(0)
+  status       String         @default("in_progress") // in_progress, completed, rejected, escalated
+  orgId        String
+  organization Organization   @relation(fields: [orgId], references: [id])
+  projectId    String?
+  project      Project?       @relation(fields: [projectId], references: [id])
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("workflow_executions")
+}
