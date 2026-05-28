@@ -10,12 +10,33 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, Plus, Trash2, Save, FileText, Star } from "lucide-react"
 
+const PROMPT_TYPES = [
+  { value: "analysis", label: "Analyse" },
+  { value: "search", label: "Recherche" },
+  { value: "document_generation", label: "Documents" },
+] as const
+
+type PromptType = (typeof PROMPT_TYPES)[number]["value"]
+
+type PromptTemplateItem = {
+  id: string
+  name: string
+  type: PromptType
+  systemPrompt: string
+  isDefault: boolean
+}
+
+function getPromptTypeLabel(type: string): string {
+  return PROMPT_TYPES.find((item) => item.value === type)?.label || type
+}
+
 export default function PromptsPage() {
-  const [templates, setTemplates] = useState<any[]>([])
+  const [templates, setTemplates] = useState<PromptTemplateItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState("")
+  const [type, setType] = useState<PromptType>("analysis")
   const [systemPrompt, setSystemPrompt] = useState("")
   const [isDefault, setIsDefault] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -31,15 +52,17 @@ export default function PromptsPage() {
 
   function resetForm() {
     setName("")
+    setType("analysis")
     setSystemPrompt("")
     setIsDefault(false)
     setEditingId(null)
     setShowForm(false)
   }
 
-  function editTemplate(t: any) {
+  function editTemplate(t: PromptTemplateItem) {
     setEditingId(t.id)
     setName(t.name)
+    setType(t.type)
     setSystemPrompt(t.systemPrompt)
     setIsDefault(t.isDefault)
     setShowForm(true)
@@ -49,7 +72,7 @@ export default function PromptsPage() {
     if (!name || !systemPrompt) return
     setSaving(true)
     const method = editingId ? "PATCH" : "POST"
-    const body = editingId ? { id: editingId, name, systemPrompt, isDefault } : { name, systemPrompt, isDefault, type: "analysis" }
+    const body = editingId ? { id: editingId, name, type, systemPrompt, isDefault } : { name, systemPrompt, isDefault, type }
     await fetch("/api/prompts", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
     resetForm()
     await fetchTemplates()
@@ -67,16 +90,17 @@ export default function PromptsPage() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Templates de prompts</h1>
-        <p className="text-muted-foreground">Personnalisez les prompts système envoyés à l&apos;IA pour vos analyses</p>
+        <p className="text-muted-foreground">Personnalisez les prompts système par usage IA : analyse, recherche et documents</p>
       </div>
 
-      {templates.map((t: any) => (
+      {templates.map((t) => (
         <Card key={t.id}>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <CardTitle className="text-base">{t.name}</CardTitle>
+                <Badge variant="outline">{getPromptTypeLabel(t.type)}</Badge>
                 {t.isDefault && <Badge variant="success"><Star className="h-3 w-3 mr-1" /> Défaut</Badge>}
               </div>
               <div className="flex gap-1">
@@ -106,6 +130,18 @@ export default function PromptsPage() {
             <div className="space-y-2">
               <Label>Nom</Label>
               <Input placeholder="Analyse sécurité" value={name} onChange={e => setName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Usage</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={type}
+                onChange={(e) => setType(e.target.value as PromptType)}
+              >
+                {PROMPT_TYPES.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-2">
               <Label>Prompt système</Label>

@@ -222,12 +222,12 @@ export default async function AuditLogsPage({
                 Filtrer
               </button>
               {hasFilters && (
-                <a
+                <Link
                   href="/audit/logs"
                   className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted"
                 >
                   Réinitialiser
-                </a>
+                </Link>
               )}
             </div>
           </form>
@@ -241,8 +241,8 @@ export default async function AuditLogsPage({
             <Activity className="h-12 w-12 text-muted-foreground/50" />
             <p className="text-center text-muted-foreground">
               {hasFilters
-                ? "Aucun log ne correspond aux filtres sélectionnés."
-                : "Aucun log d&apos;audit pour le moment."}
+                ? "Aucune entrée ne correspond aux filtres sélectionnés."
+                : "Aucune entrée d'audit pour le moment."}
             </p>
           </CardContent>
         </Card>

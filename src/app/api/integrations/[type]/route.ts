@@ -1,23 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth/auth"
+import { ADMIN_ROLES, requireApiRole } from "@/lib/auth/api-authorization"
 import { prisma } from "@/lib/db/prisma"
-import { encryptConfig, decryptConfig, maskToken, createConnectorFromConfig, INTEGRATION_FIELDS } from "@/lib/integrations/integration-service"
-import type { IntegrationType } from "@prisma/client"
+import { encryptConfig, maskToken, createConnectorFromConfig, INTEGRATION_FIELDS, validateIntegrationUrls } from "@/lib/integrations/integration-service"
+import type { IntegrationType, Prisma } from "@prisma/client"
 
 // GET — Récupérer la config d'une intégration (tokens masqués)
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ type: string }> },
 ) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-
-  const orgId = (session.user as any).orgId
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const { type } = await params
+  const integrationType = type as IntegrationType
   const projectId = req.nextUrl.searchParams.get("projectId") || undefined
 
   // Construire le where sans projectId si non spécifié
-  const where: any = { type: type as IntegrationType, orgId }
+  const where: Prisma.IntegrationWhereInput = { type: integrationType, orgId }
   if (projectId) where.projectId = projectId
 
   let integration = await prisma.integration.findFirst({ where })
@@ -68,11 +68,11 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ type: string }> },
 ) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-
-  const orgId = (session.user as any).orgId
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const { type } = await params
+  const integrationType = type as IntegrationType
   const body = await req.json()
   const { config, projectId, name } = body
 
@@ -82,11 +82,16 @@ export async function POST(
 
   const finalProjectId = projectId || null
 
+  const urlValidation = validateIntegrationUrls(integrationType, config)
+  if (!urlValidation.ok) {
+    return NextResponse.json({ error: urlValidation.error }, { status: 400 })
+  }
+
   // Chiffrer les champs sensibles
-  const encryptedConfig = encryptConfig(type as IntegrationType, config)
+  const encryptedConfig = encryptConfig(integrationType, urlValidation.config)
 
   // Vérifier si une intégration existe déjà
-  const existingWhere: any = { type: type as IntegrationType, orgId }
+  const existingWhere: Prisma.IntegrationWhereInput = { type: integrationType, orgId }
   if (finalProjectId) existingWhere.projectId = finalProjectId
   const existing = await prisma.integration.findFirst({ where: existingWhere })
 
@@ -94,8 +99,8 @@ export async function POST(
     const updated = await prisma.integration.update({
       where: { id: existing.id },
       data: {
-        config: encryptedConfig as any,
-        status: "CONNECTED" as any,
+        config: encryptedConfig as Prisma.InputJsonValue,
+        status: "CONNECTED",
         name: name || existing.name,
       },
     })
@@ -105,10 +110,10 @@ export async function POST(
 
   const integration = await prisma.integration.create({
     data: {
-      type: type as IntegrationType,
+      type: integrationType,
       name: name || `${type} — ${projectId}`,
-      status: "CONNECTED" as any,
-      config: encryptedConfig as any,
+      status: "CONNECTED",
+      config: encryptedConfig as Prisma.InputJsonValue,
       projectId: finalProjectId,
       orgId,
     },
@@ -122,11 +127,10 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ type: string }> },
 ) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-
-  const orgId = (session.user as any).orgId
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
   const { type } = await params
+  const integrationType = type as IntegrationType
   const body = await req.json()
   const { config } = body
 
@@ -135,7 +139,12 @@ export async function PUT(
   }
 
   try {
-    const connector = createConnectorFromConfig(type as IntegrationType, config)
+    const urlValidation = validateIntegrationUrls(integrationType, config)
+    if (!urlValidation.ok) {
+      return NextResponse.json({ success: false, message: urlValidation.error }, { status: 400 })
+    }
+
+    const connector = createConnectorFromConfig(integrationType, urlValidation.config)
     const success = await connector.testConnection()
 
     return NextResponse.json({
@@ -153,14 +162,14 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ type: string }> },
 ) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-
-  const orgId = (session.user as any).orgId
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const { type } = await params
+  const integrationType = type as IntegrationType
   const projectId = req.nextUrl.searchParams.get("projectId") || undefined
 
-  const deleteWhere: any = { type: type as IntegrationType, orgId }
+  const deleteWhere: Prisma.IntegrationWhereInput = { type: integrationType, orgId }
   if (projectId) deleteWhere.projectId = projectId
   await prisma.integration.deleteMany({ where: deleteWhere })
 

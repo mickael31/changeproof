@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
+import { ADMIN_ROLES, requireApiRole } from "@/lib/auth/api-authorization";
 import { prisma } from "@/lib/db/prisma";
 import { computeNextRun } from "@/lib/sync/calculator";
 
@@ -8,15 +8,12 @@ type Freq = (typeof VALID_FREQUENCIES)[number];
 
 // GET — Lister les schedules de l'organisation
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-  }
-
-  const orgId = (session.user as any).orgId as string;
+  const authz = await requireApiRole(ADMIN_ROLES);
+  if ("response" in authz) return authz.response;
+  const orgId = authz.orgId;
   const integrationId = req.nextUrl.searchParams.get("integrationId") || undefined;
 
-  const where: any = { orgId };
+  const where: { orgId: string; integrationId?: string } = { orgId };
   if (integrationId) where.integrationId = integrationId;
 
   const schedules = await prisma.syncSchedule.findMany({
@@ -32,12 +29,9 @@ export async function GET(req: NextRequest) {
 
 // POST — Créer ou mettre à jour un schedule
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-  }
-
-  const orgId = (session.user as any).orgId as string;
+  const authz = await requireApiRole(ADMIN_ROLES);
+  if ("response" in authz) return authz.response;
+  const orgId = authz.orgId;
   const body = await req.json();
   const { integrationId, frequency, cronExpression } = body;
 
@@ -97,12 +91,9 @@ export async function POST(req: NextRequest) {
 
 // DELETE — Supprimer un schedule
 export async function DELETE(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-  }
-
-  const orgId = (session.user as any).orgId as string;
+  const authz = await requireApiRole(ADMIN_ROLES);
+  if ("response" in authz) return authz.response;
+  const orgId = authz.orgId;
   const integrationId = req.nextUrl.searchParams.get("integrationId");
 
   if (!integrationId) {

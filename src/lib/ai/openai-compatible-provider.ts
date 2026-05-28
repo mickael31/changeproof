@@ -13,6 +13,7 @@ export class OpenAICompatibleProvider implements AIProvider {
   async complete(request: AICompletionRequest): Promise<AICompletionResponse> {
     const url = `${this.config.baseUrl}/chat/completions`
     const startTime = Date.now()
+    const reasoningEffort = this.config.thinkingEffort === "off" ? undefined : this.config.thinkingEffort
 
     const body = {
       model: request.model || this.config.defaultModel,
@@ -22,6 +23,7 @@ export class OpenAICompatibleProvider implements AIProvider {
       ...(request.responseFormat === "json_object" && this.config.jsonMode
         ? { response_format: { type: "json_object" } }
         : {}),
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
       stream: false,
     }
 

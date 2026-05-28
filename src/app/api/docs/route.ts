@@ -23,7 +23,7 @@ const HTML = `<!DOCTYPE html>
   <script>
     window.onload = () => {
       SwaggerUIBundle({
-        url: "/openapi.json",
+        url: "/api/openapi",
         dom_id: "#swagger-ui",
         deepLinking: true,
         presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],

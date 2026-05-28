@@ -1,3 +1,18 @@
+export const AI_THINKING_EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const
+
+export type AIThinkingEffort = (typeof AI_THINKING_EFFORTS)[number]
+
+export function normalizeAIThinkingEffort(
+  value: string | null | undefined,
+  legacyThinking = false,
+): AIThinkingEffort {
+  if (AI_THINKING_EFFORTS.includes(value as AIThinkingEffort)) {
+    return value as AIThinkingEffort
+  }
+
+  return legacyThinking ? "medium" : "off"
+}
+
 export interface AIProviderConfig {
   id: string
   name: string
@@ -12,6 +27,7 @@ export interface AIProviderConfig {
   streaming: boolean
   jsonMode: boolean
   toolCalling: boolean
+  thinkingEffort: AIThinkingEffort
 }
 
 export interface AICompletionRequest {

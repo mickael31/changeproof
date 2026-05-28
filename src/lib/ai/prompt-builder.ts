@@ -1,50 +1,12 @@
 import type { AIMessage } from "./types"
-import type { AnalysisInput } from "@/types"
+import type { AnalysisInput, AnalysisPromptOverride } from "@/types"
+import {
+  ANALYSIS_OUTPUT_SCHEMA,
+  DEFAULT_ANALYSIS_SYSTEM_PROMPT,
+  DEFAULT_DOCUMENT_GENERATION_SYSTEM_PROMPT,
+  DEFAULT_SEARCH_SYSTEM_PROMPT,
+} from "./default-prompt-templates"
 import { prisma } from "@/lib/db/prisma"
-
-const DEFAULT_SYSTEM_PROMPT = [
-  "Tu es un assistant expert en analyse d'impact de changements logiciels pour une plateforme de traçabilité.",
-  "",
-  "## RÈGLES ABSOLUES",
-  '1. Tu ne dois JAMAIS inventer d\'informations.',
-  '2. Si une information n\'est pas présente dans les sources, réponds "Information insuffisante."',
-  "3. Distingue clairement : éléments CONFIRMÉS, éléments PROBABLES, éléments À VÉRIFIER.",
-  "4. Chaque affirmation doit être sourcée depuis les données fournies.",
-  "5. Si tu n'as pas assez d'éléments pour juger, indique-le explicitement.",
-  "",
-  "## FORMAT DE SORTIE OBLIGATOIRE",
-  "Tu dois répondre UNIQUEMENT avec un objet JSON valide, sans markdown, sans commentaire.",
-].join("\n")
-
-const OUTPUT_SCHEMA = JSON.stringify(
-  {
-    globalSummary: "string - résumé global en 2-3 phrases",
-    businessSummary: "string - résumé orienté métier",
-    technicalSummary: "string - résumé orienté technique",
-    impactedComponents: ["string - liste des composants impactés"],
-    impactedApis: ["string - liste des APIs impactées"],
-    impactedScreens: ["string - liste des écrans impactés"],
-    impactedUserRoles: ["string - rôles utilisateurs impactés"],
-    impactedData: ["string - données impactées"],
-    impactedConfig: ["string - configuration impactée"],
-    impactedSecurity: ["string - aspects sécurité impactés"],
-    externalDependencies: ["string - dépendances externes concernées"],
-    functionalRisk: { level: "low|medium|high|critical", description: "string" },
-    technicalRisk: { level: "low|medium|high|critical", description: "string" },
-    securityRisk: { level: "low|medium|high|critical", description: "string" },
-    operationalRisk: { level: "low|medium|high|critical", description: "string" },
-    confidenceLevel: "number 0-1 représentant le niveau de confiance global",
-    confirmed: ["string - éléments confirmés par les sources"],
-    probable: ["string - éléments probables mais non confirmés"],
-    unproven: ["string - éléments possibles mais sans preuve"],
-    missingInfo: ["string - informations manquantes importantes"],
-    questionsToAsk: ["string - questions à poser à l'équipe"],
-    documentsToUpdate: ["string - documents à mettre à jour"],
-    finalRecommendation: "string - recommandation finale",
-  },
-  null,
-  2,
-)
 
 /**
  * Récupère le prompt système pour un type donné de l'organisation.
@@ -70,16 +32,19 @@ async function getSystemPrompt(orgId: string, type: string, defaultPrompt: strin
 export async function buildAnalysisPrompt(
   input: AnalysisInput,
   orgId?: string,
+  promptOverride?: AnalysisPromptOverride,
 ): Promise<AIMessage[]> {
-  const userContent = buildUserContent(input)
+  const userContent = promptOverride?.userPrompt?.trim() || buildUserContent(input)
 
   let systemContent: string
 
-  if (orgId) {
-    const customPrompt = await getSystemPrompt(orgId, "analysis", DEFAULT_SYSTEM_PROMPT)
-    systemContent = customPrompt + "\n\nStructure de réponse obligatoire :\n" + OUTPUT_SCHEMA
+  if (promptOverride?.systemPrompt?.trim()) {
+    systemContent = appendOutputSchema(promptOverride.systemPrompt)
+  } else if (orgId) {
+    const customPrompt = await getSystemPrompt(orgId, "analysis", DEFAULT_ANALYSIS_SYSTEM_PROMPT)
+    systemContent = appendOutputSchema(customPrompt)
   } else {
-    systemContent = DEFAULT_SYSTEM_PROMPT + "\n\nStructure de réponse obligatoire :\n" + OUTPUT_SCHEMA
+    systemContent = appendOutputSchema(DEFAULT_ANALYSIS_SYSTEM_PROMPT)
   }
 
   return [
@@ -92,6 +57,14 @@ export async function buildAnalysisPrompt(
       content: userContent,
     },
   ]
+}
+
+function appendOutputSchema(systemPrompt: string): string {
+  if (systemPrompt.includes("Structure de réponse obligatoire")) {
+    return systemPrompt
+  }
+
+  return systemPrompt + "\n\nStructure de réponse obligatoire :\n" + ANALYSIS_OUTPUT_SCHEMA
 }
 
 function buildUserContent(input: AnalysisInput): string {
@@ -167,19 +140,12 @@ export async function buildSearchPrompt(
   query: string,
   orgId?: string,
 ): Promise<AIMessage[]> {
-  const DEFAULT_SEARCH_PROMPT = [
-    "Tu es un assistant de recherche pour une plateforme de traçabilité de changements logiciels.",
-    "Utilise UNIQUEMENT les informations fournies dans le contexte.",
-    "Si l'information n'est pas disponible, dis-le clairement.",
-    "Réponds en français, de manière concise et structurée.",
-  ].join("\n")
-
   let systemContent: string
 
   if (orgId) {
-    systemContent = await getSystemPrompt(orgId, "search", DEFAULT_SEARCH_PROMPT)
+    systemContent = await getSystemPrompt(orgId, "search", DEFAULT_SEARCH_SYSTEM_PROMPT)
   } else {
-    systemContent = DEFAULT_SEARCH_PROMPT
+    systemContent = DEFAULT_SEARCH_SYSTEM_PROMPT
   }
 
   return [
@@ -199,20 +165,12 @@ export async function buildDocumentGenerationPrompt(
   docType: string,
   orgId?: string,
 ): Promise<AIMessage[]> {
-  const DEFAULT_DOC_PROMPT = [
-    "Tu es un assistant expert en rédaction de documentation technique pour une plateforme de traçabilité.",
-    "Rédige des documents clairs, structurés et exploitables.",
-    "Utilise UNIQUEMENT les informations fournies en contexte.",
-    "N'invente jamais d'informations.",
-    "Réponds en français, avec un formatage markdown approprié.",
-  ].join("\n")
-
   let systemContent: string
 
   if (orgId) {
-    systemContent = await getSystemPrompt(orgId, "document_generation", DEFAULT_DOC_PROMPT)
+    systemContent = await getSystemPrompt(orgId, "document_generation", DEFAULT_DOCUMENT_GENERATION_SYSTEM_PROMPT)
   } else {
-    systemContent = DEFAULT_DOC_PROMPT
+    systemContent = DEFAULT_DOCUMENT_GENERATION_SYSTEM_PROMPT
   }
 
   return [

@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initializeJobs, processPendingJobs, enqueueJob } from "@/lib/jobs";
-import { isDue, computeNextRun } from "@/lib/sync/calculator";
+import { isDue, computeNextRun, type SyncFrequency } from "@/lib/sync/calculator";
 
 let jobsInitialized = false;
 
 export async function GET(req: NextRequest) {
   // Vérification par token partagé (similaire à Vercel Cron)
   const authHeader = req.headers.get("authorization");
-  const expectedToken = process.env.CRON_SECRET || "changeproof-cron-secret";
+  const expectedToken = process.env.CRON_SECRET;
+
+  if (!expectedToken) {
+    console.error("CRON_SECRET is not configured");
+    return NextResponse.json({ error: "Cron non configuré" }, { status: 503 });
+  }
 
   if (authHeader !== `Bearer ${expectedToken}`) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
@@ -50,7 +55,7 @@ export async function GET(req: NextRequest) {
 
         // Mettre à jour lastRunAt et nextRunAt
         const nextRunAt = computeNextRun(
-          schedule.frequency as any,
+          schedule.frequency as SyncFrequency,
           schedule.cronExpression
         );
 
@@ -65,7 +70,7 @@ export async function GET(req: NextRequest) {
       const scheduledIds = schedules.map((s) => s.integrationId);
       const unscheduledIntegrations = await prisma.integration.findMany({
         where: {
-          status: "CONNECTED" as any,
+          status: "CONNECTED",
           id: { notIn: scheduledIds },
         },
       });
@@ -129,7 +134,7 @@ export async function GET(req: NextRequest) {
 
       if (schedule) {
         const nextRunAt = computeNextRun(
-          schedule.frequency as any,
+          schedule.frequency as SyncFrequency,
           schedule.cronExpression
         );
         await prisma.syncSchedule.update({

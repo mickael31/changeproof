@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole, Criticality, ChangeSource, DocumentType, DocumentStatus, AnalysisStatus, InconsistencySeverity, InconsistencyStatus, IntegrationType, IntegrationStatus } from "@prisma/client"
 import * as bcrypt from "bcryptjs"
+import { DEFAULT_PROMPT_TEMPLATES } from "../src/lib/ai/default-prompt-templates"
 import { encrypt } from "../src/lib/utils/crypto"
 
 const prisma = new PrismaClient()
@@ -100,7 +101,7 @@ async function main() {
 
   // ──── 4. AI Provider Config ────
   // Clé API mockée (sera chiffrée)
-  const apiKeyEncrypted = encrypt("sk-mock-api-key-for-demo-purposes-only-1234")
+  const apiKeyEncrypted = encrypt("demo-api-key-for-local-seed-only-1234")
 
   await prisma.aIProviderConfig.create({
     data: {
@@ -117,11 +118,24 @@ async function main() {
       streaming: false,
       jsonMode: true,
       toolCalling: false,
+      thinking: false,
+      thinkingEffort: "off",
       isActive: true,
       lastTestAt: new Date(),
       lastTestSuccess: true,
     },
   })
+
+  await prisma.promptTemplate.createMany({
+    data: DEFAULT_PROMPT_TEMPLATES.map((template) => ({
+      orgId: org.id,
+      name: template.name,
+      type: template.type,
+      systemPrompt: template.systemPrompt,
+      isDefault: template.isDefault,
+    })),
+  })
+  console.log("  ✅ Prompt templates: analyse, recherche, documents")
 
   // ──── 5. Projects ────
   const project1 = await prisma.project.create({

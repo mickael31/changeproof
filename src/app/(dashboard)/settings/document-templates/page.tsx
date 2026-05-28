@@ -1,19 +1,48 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Plus, Trash2, Save, Globe, Lock } from "lucide-react"
 
-const DOC_TYPES = ["FUNCTIONAL_SPEC", "TECHNICAL_SPEC", "RELEASE_NOTE", "IMPACT_SHEET", "AUDIT_SHEET", "SECURITY_REPORT"]
+const DOC_TYPES = [
+  "FUNCTIONAL_SPEC",
+  "TECHNICAL_SPEC",
+  "RELEASE_NOTE",
+  "IMPACT_SHEET",
+  "OPERATIONAL_PROCEDURE",
+  "PO_VALIDATION",
+  "TECH_LEAD_VALIDATION",
+  "AUDIT_SHEET",
+  "TEAMS_SUMMARY",
+  "CONFLUENCE_SUMMARY",
+  "API_DOC",
+  "SECURITY_REPORT",
+]
 const TONES = ["Formel", "Technique", "Pédagogique", "Synthétique"]
 
+type DocumentTemplateItem = {
+  id: string
+  name: string
+  documentType: string
+  sections: string[]
+  tone: string
+  isPublic: boolean
+}
+
+async function fetchTemplates(): Promise<DocumentTemplateItem[]> {
+  const response = await fetch("/api/document-templates")
+  if (!response.ok) throw new Error("Impossible de charger les templates")
+  return response.json() as Promise<DocumentTemplateItem[]>
+}
+
 export default function DocumentTemplatesPage() {
-  const [templates, setTemplates] = useState<any[]>([])
+  const [templates, setTemplates] = useState<DocumentTemplateItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState("")
   const [docType, setDocType] = useState(DOC_TYPES[0])
   const [tone, setTone] = useState(TONES[0])
@@ -21,7 +50,22 @@ export default function DocumentTemplatesPage() {
   const [sections, setSections] = useState<string[]>(["Contexte", "Analyse", "Recommandations"])
 
   useEffect(() => {
-    fetch("/api/document-templates").then((r) => r.json()).then(setTemplates).finally(() => setLoading(false))
+    let mounted = true
+
+    fetchTemplates()
+      .then((data) => {
+        if (mounted) setTemplates(data)
+      })
+      .catch(() => {
+        if (mounted) setError("Les templates de documents ne sont pas disponibles.")
+      })
+      .finally(() => {
+        if (mounted) setLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
   const addSection = () => setSections([...sections, ""])
@@ -29,18 +73,31 @@ export default function DocumentTemplatesPage() {
   const removeSection = (i: number) => setSections(sections.filter((_, j) => j !== i))
 
   const handleCreate = async () => {
-    await fetch("/api/document-templates", {
+    setError(null)
+    const response = await fetch("/api/document-templates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name || "Mon template", documentType: docType, sections, tone, isPublic }),
     })
+    if (!response.ok) {
+      setError("Le template n'a pas pu être créé.")
+      return
+    }
     setName("")
-    const data = await fetch("/api/document-templates").then((r) => r.json())
-    setTemplates(data)
+    try {
+      setTemplates(await fetchTemplates())
+    } catch {
+      setError("Les templates de documents ne sont pas disponibles.")
+    }
   }
 
   const handleDelete = async (id: string) => {
-    await fetch("/api/document-templates", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) })
+    setError(null)
+    const response = await fetch("/api/document-templates", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) })
+    if (!response.ok) {
+      setError("Le template n'a pas pu être supprimé.")
+      return
+    }
     setTemplates(templates.filter((t) => t.id !== id))
   }
 
@@ -94,15 +151,16 @@ export default function DocumentTemplatesPage() {
       <Card>
         <CardHeader><CardTitle className="text-lg">Mes templates ({templates.length})</CardTitle></CardHeader>
         <CardContent>
+          {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : templates.length === 0 ? (
             <p className="text-sm text-muted-foreground">Aucun template personnel. Créez-en un ci-dessus.</p>
           ) : (
             <div className="space-y-2">
               {templates.map((t) => (
                 <div key={t.id} className="flex justify-between items-center p-3 border rounded-lg">
-                  <div><p className="font-medium">{t.name}</p><p className="text-xs text-muted-foreground">{t.document_type} · {t.tone} · {t.sections?.length || 0} sections</p></div>
+                  <div><p className="font-medium">{t.name}</p><p className="text-xs text-muted-foreground">{t.documentType} · {t.tone} · {t.sections?.length || 0} sections</p></div>
                   <div className="flex gap-2">
-                    {t.is_public && <Badge variant="outline" className="gap-1"><Globe className="h-3 w-3" />Public</Badge>}
+                    {t.isPublic && <Badge variant="outline" className="gap-1"><Globe className="h-3 w-3" />Public</Badge>}
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(t.id)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>

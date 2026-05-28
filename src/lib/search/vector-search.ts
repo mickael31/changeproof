@@ -26,6 +26,8 @@ export interface ProviderConfig {
   embeddingModel: string | null
 }
 
+const EMBEDDING_CHUNK_CHARS = 24_000
+
 // ---------------------------------------------------------------------------
 // Génération d'embedding
 // ---------------------------------------------------------------------------
@@ -72,6 +74,37 @@ export async function generateEmbedding(
   return data.data[0].embedding
 }
 
+export function splitTextForEmbedding(text: string, chunkSize = EMBEDDING_CHUNK_CHARS): string[] {
+  const normalized = text.trim()
+  if (!normalized) return []
+
+  const chunks: string[] = []
+  for (let start = 0; start < normalized.length; start += chunkSize) {
+    chunks.push(normalized.slice(start, start + chunkSize))
+  }
+
+  return chunks
+}
+
+export function averageEmbeddings(embeddings: number[][]): number[] {
+  if (embeddings.length === 0) return []
+
+  const dimensions = embeddings[0].length
+  const totals = Array.from({ length: dimensions }, () => 0)
+
+  for (const embedding of embeddings) {
+    if (embedding.length !== dimensions) {
+      throw new Error("Dimensions d'embedding incompatibles")
+    }
+
+    embedding.forEach((value, index) => {
+      totals[index] += value
+    })
+  }
+
+  return totals.map((total) => total / embeddings.length)
+}
+
 // ---------------------------------------------------------------------------
 // Recherche similarité cosinus via pgvector
 // ---------------------------------------------------------------------------
@@ -96,7 +129,7 @@ export async function searchSimilar(
       type: string
       content: string
       similarity: number
-      project_name: string
+      project_name: string | null
     }[]
   >(
     `
@@ -106,10 +139,10 @@ export async function searchSimilar(
       d.type::text AS type,
       d.content,
       1 - (de.embedding <=> $1::vector) AS similarity,
-      p.name AS project_name
+      COALESCE(p.name, 'Entreprise') AS project_name
     FROM document_embeddings de
     JOIN documents d ON d.id = de.document_id
-    JOIN projects p ON p.id = d.project_id
+    LEFT JOIN projects p ON p.id = d.project_id
     WHERE d.org_id = $2
       AND d.status != 'OBSOLETE'
     ORDER BY de.embedding <=> $1::vector
@@ -126,7 +159,7 @@ export async function searchSimilar(
     type: r.type,
     content: r.content.slice(0, 800), // Extrait pour l'affichage
     similarity: Number(r.similarity),
-    projectName: r.project_name,
+    projectName: r.project_name ?? "Entreprise",
   }))
 }
 
@@ -142,7 +175,18 @@ export async function indexDocument(
   content: string,
   providerConfig: ProviderConfig,
 ): Promise<void> {
-  const embedding = await generateEmbedding(content, providerConfig)
+  const chunks = splitTextForEmbedding(content)
+  if (chunks.length === 0) {
+    throw new Error("Document vide: impossible de générer un embedding")
+  }
+
+  const embeddings: number[][] = []
+
+  for (const chunk of chunks) {
+    embeddings.push(await generateEmbedding(chunk, providerConfig))
+  }
+
+  const embedding = averageEmbeddings(embeddings)
   const embeddingStr = `[${embedding.join(",")}]`
   const model = providerConfig.embeddingModel || "text-embedding-ada-002"
 
@@ -187,7 +231,7 @@ export async function searchByKeywords(
         type: string
         content: string
         rank: number
-        project_name: string
+        project_name: string | null
       }[]
     >(
       `
@@ -200,9 +244,9 @@ export async function searchByKeywords(
           to_tsvector('french', coalesce(d.title, '') || ' ' || coalesce(d.content, '')),
           plainto_tsquery('french', $1)
         ) AS rank,
-        p.name AS project_name
+        COALESCE(p.name, 'Entreprise') AS project_name
       FROM documents d
-      JOIN projects p ON p.id = d.project_id
+      LEFT JOIN projects p ON p.id = d.project_id
       WHERE d.org_id = $2
         AND d.status != 'OBSOLETE'
         AND (
@@ -226,7 +270,7 @@ export async function searchByKeywords(
           type: r.type,
           content: r.content.slice(0, 800),
           similarity: 0,
-          projectName: r.project_name,
+          projectName: r.project_name ?? "Entreprise",
           score: r.rank * 0.3,
         })
       }

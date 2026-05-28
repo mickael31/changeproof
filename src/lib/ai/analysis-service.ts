@@ -5,7 +5,8 @@ import { parseAIResponse } from "./structured-output-parser"
 import { decrypt } from "@/lib/utils/crypto"
 import { prisma } from "@/lib/db/prisma"
 import { sanitizeAIInput } from "@/lib/security/prompt-guard"
-import type { AnalysisInput, AIStructuredResult } from "@/types"
+import { normalizeAIThinkingEffort } from "./types"
+import type { AnalysisInput, AnalysisPromptOverride, AIStructuredResult } from "@/types"
 import type { AIProvider, AIProviderConfig } from "./types"
 
 export class AIAnalysisService {
@@ -34,7 +35,7 @@ export class AIAnalysisService {
   /**
    * Exécute une analyse complète à partir des données d'entrée
    */
-  static async analyze(input: AnalysisInput, orgId: string): Promise<{
+  static async analyze(input: AnalysisInput, orgId: string, promptOverride?: AnalysisPromptOverride): Promise<{
     success: boolean
     analysisId?: string
     result?: AIStructuredResult
@@ -52,13 +53,13 @@ export class AIAnalysisService {
     // Si aucun provider configuré, basculer automatiquement en mode démo
     if (!providerConfig && !forceMock) {
       console.warn(`[Demo] Aucun provider IA configuré pour l'organisation ${orgId}. Mode démo activé.`)
-      return this.analyzeWithMock(input, orgId)
+      return this.analyzeWithMock(input, orgId, promptOverride)
     }
 
     // Si mode mock forcé, utiliser le mock provider
     if (forceMock) {
       console.warn(`[Demo] Mode démo forcé pour l'organisation ${orgId}.`)
-      return this.analyzeWithMock(input, orgId)
+      return this.analyzeWithMock(input, orgId, promptOverride)
     }
 
     if (!providerConfig) {
@@ -98,7 +99,7 @@ export class AIAnalysisService {
     }
 
     // 5. Construire le prompt (avec template personnalisé si disponible)
-    const messages = await buildAnalysisPrompt(sanitizedInput, orgId)
+    const messages = await buildAnalysisPrompt(sanitizedInput, orgId, promptOverride)
 
     // 6. Créer le provider et appeler
     const providerConfig2: AIProviderConfig = {
@@ -115,6 +116,7 @@ export class AIAnalysisService {
       streaming: providerConfig.streaming,
       jsonMode: providerConfig.jsonMode,
       toolCalling: providerConfig.toolCalling,
+      thinkingEffort: normalizeAIThinkingEffort(providerConfig.thinkingEffort, providerConfig.thinking),
     }
 
     const provider = new OpenAICompatibleProvider(providerConfig2)
@@ -225,6 +227,7 @@ export class AIAnalysisService {
   private static async analyzeWithMock(
     input: AnalysisInput,
     orgId: string,
+    promptOverride?: AnalysisPromptOverride,
   ): Promise<{
     success: boolean
     analysisId?: string
@@ -260,7 +263,7 @@ export class AIAnalysisService {
     }
 
     // 3. Construire le prompt (avec template personnalisé si disponible)
-    const messages = await buildAnalysisPrompt(sanitizedInput, orgId)
+    const messages = await buildAnalysisPrompt(sanitizedInput, orgId, promptOverride)
 
     // 4. Utiliser le MockAIProvider
     const provider = new MockAIProvider()
@@ -387,6 +390,7 @@ export class AIAnalysisService {
       streaming: config.streaming,
       jsonMode: config.jsonMode,
       toolCalling: config.toolCalling,
+      thinkingEffort: normalizeAIThinkingEffort(config.thinkingEffort, config.thinking),
     }
 
     const provider = new OpenAICompatibleProvider(providerConfig)

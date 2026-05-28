@@ -12,10 +12,18 @@ import Link from "next/link"
 interface SearchResult {
   summary: string
   sources: { type: string; id: string; title: string }[]
-  tickets: { id: string; title: string }[]
+  tickets: { id: string; changeId: string; title: string }[]
   commits: { id: string; message: string }[]
-  documents: { id: string; title: string }[]
+  documents: {
+    id: string
+    title: string
+    type?: string
+    excerpt?: string
+    similarity?: number
+    projectName?: string
+  }[]
   confidence: number
+  mode?: "simple" | "ai"
 }
 
 const SUGGESTIONS = [
@@ -127,7 +135,7 @@ export default function SearchPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Réponse</CardTitle>
                 <Badge variant="outline">
-                  Confiance : {Math.round(result.confidence * 100)}%
+                  {result.mode === "ai" ? "IA" : "Index"} · Confiance : {Math.round(result.confidence * 100)}%
                 </Badge>
               </div>
             </CardHeader>
@@ -165,7 +173,7 @@ export default function SearchPage() {
                   {result.tickets.map((ticket) => (
                     <Link
                       key={ticket.id}
-                      href={`/changes/${ticket.id}`}
+                      href={`/changes/${ticket.changeId}`}
                       className="flex items-center gap-2 text-sm hover:text-primary"
                     >
                       <ExternalLink className="h-3 w-3" />
@@ -186,10 +194,23 @@ export default function SearchPage() {
                     <Link
                       key={doc.id}
                       href={`/documents/${doc.id}`}
-                      className="flex items-center gap-2 text-sm hover:text-primary"
+                      className="block rounded-md border p-2 text-sm hover:border-primary/50 hover:text-primary"
                     >
-                      <ExternalLink className="h-3 w-3" />
-                      {doc.title}
+                      <span className="flex items-center gap-2 font-medium">
+                        <ExternalLink className="h-3 w-3" />
+                        {doc.title}
+                      </span>
+                      {(doc.projectName || doc.similarity != null) && (
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {doc.projectName ?? "Document"}
+                          {doc.similarity != null ? ` · pertinence ${Math.round(doc.similarity * 100)}%` : ""}
+                        </span>
+                      )}
+                      {doc.excerpt && (
+                        <span className="mt-1 line-clamp-2 block text-xs text-muted-foreground">
+                          {doc.excerpt}
+                        </span>
+                      )}
                     </Link>
                   ))}
                 </CardContent>

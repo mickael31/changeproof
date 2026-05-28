@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth/auth"
+import { ADMIN_ROLES, requireApiRole } from "@/lib/auth/api-authorization"
 import { prisma } from "@/lib/db/prisma"
 import { OpenAICompatibleProvider } from "@/lib/ai/openai-compatible-provider"
 import { decrypt } from "@/lib/utils/crypto"
+import { validateExternalHttpUrl } from "@/lib/security/url"
 
 // GET — Lister les modèles d'un provider existant (par providerId)
 // POST — Lister les modèles avec une config temporaire (baseUrl + apiKey)
 export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  }
-
-  const orgId = (session.user as any).orgId
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const providerId = req.nextUrl.searchParams.get("providerId")
 
   if (!providerId) {
@@ -23,10 +21,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  }
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
 
   const body = await req.json()
   const { baseUrl, apiKey } = body
@@ -58,12 +54,17 @@ async function listModelsFromDb(providerId: string, orgId: string) {
 }
 
 async function listModelsDirect(baseUrl: string, apiKey: string) {
+  const safeBaseUrl = validateExternalHttpUrl(baseUrl)
+  if (!safeBaseUrl.ok) {
+    return NextResponse.json({ success: false, error: safeBaseUrl.error, models: [], chatModels: [], embedModels: [] }, { status: 400 })
+  }
+
   // Créer un provider temporaire pour lister les modèles
   const provider = new OpenAICompatibleProvider({
     id: "temp",
     name: "temp",
     type: "openai_compatible",
-    baseUrl,
+    baseUrl: safeBaseUrl.url,
     apiKey,
     defaultModel: "unknown",
     timeout: 15000,
@@ -72,6 +73,7 @@ async function listModelsDirect(baseUrl: string, apiKey: string) {
     streaming: false,
     jsonMode: false,
     toolCalling: false,
+    thinkingEffort: "off",
   })
 
   try {

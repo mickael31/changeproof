@@ -1,30 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth/auth"
+import { ADMIN_ROLES, requireApiRole } from "@/lib/auth/api-authorization"
 import { AIAnalysisService } from "@/lib/ai/analysis-service"
 
 /**
  * GET  /api/ai/demo-mode — Vérifie si le mode démo est actif pour l'organisation
  * POST /api/ai/demo-mode — Active/désactive le mode démo forcé
  */
-export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  }
-
-  const orgId = (session.user as any).orgId
+export async function GET() {
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const isDemo = AIAnalysisService.isForceMock(orgId)
 
   return NextResponse.json({ demoMode: isDemo })
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  }
-
-  const orgId = (session.user as any).orgId
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
 
   try {
     const body = await req.json()

@@ -1,13 +1,35 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth/auth"
+import { ADMIN_ROLES, requireApiRole } from "@/lib/auth/api-authorization"
 import { prisma } from "@/lib/db/prisma"
 import type { UserRole } from "@prisma/client"
 
+type WorkflowStepInput = {
+  order?: number
+  role?: UserRole
+  action?: string
+  deadlineHours?: number | null
+  escalateAfter?: number | null
+  escalateTo?: UserRole | null
+}
+
+type WorkflowPayload = {
+  id?: string
+  projectId?: string | null
+  name?: string
+  trigger?: string
+  isActive?: boolean
+  steps?: WorkflowStepInput[]
+}
+
+function getSteps(body: WorkflowPayload): WorkflowStepInput[] {
+  return Array.isArray(body.steps) ? body.steps : []
+}
+
 // GET /api/workflows — Liste les workflows de l'organisation
 export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  const orgId = (session.user as any).orgId as string
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
 
   const projectId = req.nextUrl.searchParams.get("projectId") || undefined
 
@@ -22,11 +44,11 @@ export async function GET(req: NextRequest) {
 
 // POST /api/workflows — Crée un workflow
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  const orgId = (session.user as any).orgId as string
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
 
-  const body = await req.json()
+  const body = (await req.json()) as WorkflowPayload
   if (!body.name || !body.trigger) {
     return NextResponse.json({ error: "name et trigger requis" }, { status: 400 })
   }
@@ -44,7 +66,7 @@ export async function POST(req: NextRequest) {
       trigger: body.trigger,
       isActive: body.isActive !== false,
       steps: {
-        create: (body.steps || []).map((step: any, idx: number) => ({
+        create: getSteps(body).map((step, idx) => ({
           order: step.order ?? idx,
           role: (step.role || "PRODUCT_OWNER") as UserRole,
           action: step.action || "approve",
@@ -62,11 +84,11 @@ export async function POST(req: NextRequest) {
 
 // PUT /api/workflows — Met à jour un workflow
 export async function PUT(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  const orgId = (session.user as any).orgId as string
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
 
-  const body = await req.json()
+  const body = (await req.json()) as WorkflowPayload
   if (!body.id) return NextResponse.json({ error: "id requis" }, { status: 400 })
 
   // Vérifier que le workflow appartient à l'organisation
@@ -86,7 +108,7 @@ export async function PUT(req: NextRequest) {
       trigger: body.trigger,
       isActive: body.isActive,
       steps: {
-        create: (body.steps || []).map((step: any, idx: number) => ({
+        create: getSteps(body).map((step, idx) => ({
           order: step.order ?? idx,
           role: (step.role || "PRODUCT_OWNER") as UserRole,
           action: step.action || "approve",
@@ -104,9 +126,9 @@ export async function PUT(req: NextRequest) {
 
 // DELETE /api/workflows — Supprime un workflow
 export async function DELETE(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  const orgId = (session.user as any).orgId as string
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const id = req.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 })
 

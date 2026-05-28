@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { decrypt } from "@/lib/utils/crypto"
 import { OpenAICompatibleProvider } from "@/lib/ai/openai-compatible-provider"
+import { normalizeAIThinkingEffort } from "@/lib/ai/types"
 import type { AIProviderConfig } from "@/lib/ai/types"
 
 const startTime = Date.now()
@@ -44,6 +45,7 @@ async function checkAI(): Promise<boolean> {
       streaming: activeProvider.streaming,
       jsonMode: activeProvider.jsonMode,
       toolCalling: activeProvider.toolCalling,
+      thinkingEffort: normalizeAIThinkingEffort(activeProvider.thinkingEffort, activeProvider.thinking),
     }
 
     const provider = new OpenAICompatibleProvider(config)

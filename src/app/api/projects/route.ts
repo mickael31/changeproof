@@ -5,14 +5,14 @@ import { z } from "zod"
 
 const createProjectSchema = z.object({
   name: z.string().min(1, "Le nom est requis").max(200),
-  description: z.string().max(2000).optional(),
-  domain: z.string().max(200).optional(),
-  repositoryUrl: z.string().url("URL invalide").max(500).optional().or(z.literal("")),
-  jiraProject: z.string().max(200).optional(),
-  confluenceSpace: z.string().max(200).optional(),
+  description: z.string().max(2000).optional().nullable(),
+  domain: z.string().max(200).optional().nullable(),
+  repositoryUrl: z.string().url("URL invalide").max(500).optional().nullable().or(z.literal("")),
+  jiraProject: z.string().max(200).optional().nullable(),
+  confluenceSpace: z.string().max(200).optional().nullable(),
   criticality: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).optional(),
-  teamId: z.string().optional(),
+  teamId: z.string().optional().nullable(),
 })
 
 export async function GET(req: NextRequest) {

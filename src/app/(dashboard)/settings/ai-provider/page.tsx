@@ -36,11 +36,14 @@ import type { AIProviderFormData } from "@/types"
 
 interface Provider extends AIProviderFormData {
 id: string
+thinking?: boolean
 createdAt: string
 updatedAt: string
 lastTestAt?: string
 lastTestSuccess?: boolean
 }
+
+type ProviderModel = { id: string; owned_by?: string }
 
 const DEFAULT_FORM: AIProviderFormData = {
 name: "",
@@ -55,7 +58,44 @@ temperature: 0.3,
 streaming: false,
 jsonMode: true,
 toolCalling: false,
+thinkingEffort: "off",
 isActive: true,
+}
+
+const THINKING_EFFORT_OPTIONS: Array<{ value: AIProviderFormData["thinkingEffort"]; label: string }> = [
+{ value: "off", label: "Désactivé" },
+{ value: "minimal", label: "Minimal" },
+{ value: "low", label: "Low" },
+{ value: "medium", label: "Medium" },
+{ value: "high", label: "High" },
+{ value: "xhigh", label: "XHigh" },
+]
+
+const isEmbeddingModel = (model: ProviderModel) => model.id.toLowerCase().includes("embed")
+
+const isChatModel = (model: ProviderModel) => {
+const id = model.id.toLowerCase()
+return !id.includes("embed") && !id.includes("moderation") && !id.includes("audio") && !id.includes("tts")
+}
+
+const normalizeModels = (models: unknown): ProviderModel[] => {
+if (!Array.isArray(models)) return []
+
+return models
+.map((model) => {
+if (typeof model === "string") return { id: model }
+if (!model || typeof model !== "object") return null
+
+const record = model as Record<string, unknown>
+const id = record.id || record.name
+if (typeof id !== "string" || id.length === 0) return null
+
+return {
+id,
+owned_by: typeof record.owned_by === "string" ? record.owned_by : undefined,
+}
+})
+.filter((model): model is ProviderModel => model !== null)
 }
 
 export default function AIProviderSettingsPage() {
@@ -68,7 +108,12 @@ const [showApiKey, setShowApiKey] = useState(false)
 const [saving, setSaving] = useState(false)
 const [testing, setTesting] = useState<string | null>(null)
 const [fetchingModels, setFetchingModels] = useState(false)
-const [availableModels, setAvailableModels] = useState<{ id: string; owned_by?: string }[]>([])
+const [loadModelsFromUrl, setLoadModelsFromUrl] = useState(true)
+const [useDefaultModelFromUrl, setUseDefaultModelFromUrl] = useState(true)
+const [useEmbeddingModelFromUrl, setUseEmbeddingModelFromUrl] = useState(true)
+const [availableModels, setAvailableModels] = useState<ProviderModel[]>([])
+const [availableChatModels, setAvailableChatModels] = useState<ProviderModel[]>([])
+const [availableEmbeddingModels, setAvailableEmbeddingModels] = useState<ProviderModel[]>([])
 const [testResults, setTestResults] = useState<
 Record<string, { success: boolean; model?: string; latencyMs?: number; error?: string } | null>
 >({})
@@ -126,12 +171,24 @@ fetchProviders()
 const resetForm = () => {
 setForm({ ...DEFAULT_FORM })
 setEditingId(null)
+setLoadModelsFromUrl(true)
+setUseDefaultModelFromUrl(true)
+setUseEmbeddingModelFromUrl(true)
+setAvailableModels([])
+setAvailableChatModels([])
+setAvailableEmbeddingModels([])
 setError(null)
 setSuccess(null)
 }
 
 const handleEdit = (p: Provider) => {
 setEditingId(p.id)
+setLoadModelsFromUrl(true)
+setUseDefaultModelFromUrl(true)
+setUseEmbeddingModelFromUrl(true)
+setAvailableModels([])
+setAvailableChatModels([])
+setAvailableEmbeddingModels([])
 setForm({
 name: p.name,
 type: p.type,
@@ -145,6 +202,7 @@ temperature: p.temperature,
 streaming: p.streaming,
 jsonMode: p.jsonMode,
 toolCalling: p.toolCalling,
+thinkingEffort: p.thinkingEffort || (p.thinking ? "medium" : "off"),
 isActive: p.isActive,
 })
 setError(null)
@@ -253,6 +311,11 @@ setTesting(null)
 }
 
 const handleFieldChange = (field: keyof AIProviderFormData, value: string | number | boolean) => {
+if (field === "baseUrl" || field === "apiKey") {
+setAvailableModels([])
+setAvailableChatModels([])
+setAvailableEmbeddingModels([])
+}
 setForm((prev) => ({ ...prev, [field]: value }))
 }
 
@@ -260,6 +323,8 @@ const fetchModels = useCallback(async () => {
 if (!form.baseUrl || !form.apiKey) return
 setFetchingModels(true)
 setAvailableModels([])
+setAvailableChatModels([])
+setAvailableEmbeddingModels([])
 
 try {
 // Créer un provider temporaire juste pour lister les modèles
@@ -274,9 +339,13 @@ apiKey: form.apiKey,
 
 if (res.ok) {
 const data = await res.json()
-if (data.models) {
-setAvailableModels(data.models)
-}
+const models = normalizeModels(data.models)
+const chatModels = normalizeModels(data.chatModels)
+const embedModels = normalizeModels(data.embedModels)
+
+setAvailableModels(models)
+setAvailableChatModels(chatModels.length > 0 ? chatModels : models.filter(isChatModel))
+setAvailableEmbeddingModels(embedModels.length > 0 ? embedModels : models.filter(isEmbeddingModel))
 } else {
 // Fallback: appeler directement via fetch
 const directRes = await fetch(`${form.baseUrl}/models`, {
@@ -284,11 +353,10 @@ headers: { Authorization: `Bearer ${form.apiKey}` },
 })
 if (directRes.ok) {
 const data = await directRes.json()
-const models = (data.data || data.models || []).map((m: any) => ({
-id: m.id || m.name || "unknown",
-owned_by: m.owned_by || undefined,
-}))
+const models = normalizeModels(data.data || data.models || [])
 setAvailableModels(models)
+setAvailableChatModels(models.filter(isChatModel))
+setAvailableEmbeddingModels(models.filter(isEmbeddingModel))
 } else {
 setError("Impossible de récupérer la liste des modèles. Vérifiez l'URL et la clé API.")
 }
@@ -299,6 +367,42 @@ setError("Erreur réseau. Vérifiez l'URL du provider.")
 setFetchingModels(false)
 }
 }, [form.baseUrl, form.apiKey])
+
+const handleModelSourceChange = (checked: boolean) => {
+setLoadModelsFromUrl(checked)
+setUseDefaultModelFromUrl(checked)
+setUseEmbeddingModelFromUrl(checked)
+setAvailableModels([])
+setAvailableChatModels([])
+setAvailableEmbeddingModels([])
+
+if (checked && form.baseUrl && form.apiKey) {
+void fetchModels()
+}
+}
+
+const handleDefaultModelSourceChange = (checked: boolean) => {
+setUseDefaultModelFromUrl(checked)
+
+if (checked && loadModelsFromUrl && form.baseUrl && form.apiKey && availableModels.length === 0) {
+void fetchModels()
+}
+}
+
+const handleEmbeddingModelSourceChange = (checked: boolean) => {
+setUseEmbeddingModelFromUrl(checked)
+
+if (checked && loadModelsFromUrl && form.baseUrl && form.apiKey && availableModels.length === 0) {
+void fetchModels()
+}
+}
+
+const chatModelOptions = availableChatModels.length > 0 ? availableChatModels : availableModels.filter(isChatModel)
+const embeddingModelOptions = availableEmbeddingModels.length > 0 ? availableEmbeddingModels : availableModels.filter(isEmbeddingModel)
+const shouldUseDefaultModelSelect = loadModelsFromUrl && useDefaultModelFromUrl
+const shouldUseEmbeddingModelSelect = loadModelsFromUrl && useEmbeddingModelFromUrl
+const hasDefaultModelInList = chatModelOptions.some((model) => model.id === form.defaultModel)
+const hasEmbeddingModelInList = embeddingModelOptions.some((model) => model.id === form.embeddingModel)
 
 if (loading) {
 return (
@@ -481,7 +585,7 @@ return (
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p><span className="font-medium">URL :</span> {p.baseUrl}</p>
                     <p><span className="font-medium">Modèle :</span> {p.defaultModel}{p.embeddingModel ? ` · Embedding : ${p.embeddingModel}` : ""}</p>
-                    <p><span className="font-medium">Paramètres :</span> max {p.maxTokens} tokens · température {p.temperature} · timeout {p.timeout / 1000}s</p>
+                    <p><span className="font-medium">Paramètres :</span> max {p.maxTokens} tokens · température {p.temperature} · timeout {p.timeout / 1000}s{p.thinkingEffort && p.thinkingEffort !== "off" ? ` · thinking ${p.thinkingEffort}` : ""}</p>
                   </div>
                   <div className="mt-2 flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => handleTest(p.id)} disabled={testing === p.id}>
@@ -549,16 +653,28 @@ return (
 
           {/* Chargement des modèles */}
           <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-3">
                 <Label className="text-sm font-medium">Modèles disponibles sur ce provider</Label>
                 <p className="text-xs text-muted-foreground">Cliquez pour interroger l&apos;API et voir quels modèles sont disponibles.</p>
+                <label htmlFor="loadModelsFromUrl" className="flex items-start gap-2 text-sm">
+                  <input
+                    id="loadModelsFromUrl"
+                    type="checkbox"
+                    checked={loadModelsFromUrl}
+                    onChange={(event) => handleModelSourceChange(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                  />
+                  <span>
+                    {"Charger la liste des modèles depuis l'URL du provider"}
+                  </span>
+                </label>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={fetchModels} disabled={fetchingModels || !form.baseUrl || !form.apiKey}>
+              <Button type="button" variant="outline" size="sm" onClick={fetchModels} disabled={!loadModelsFromUrl || fetchingModels || !form.baseUrl || !form.apiKey}>
                 {fetchingModels ? <><Loader2 className="h-3 w-3 animate-spin" /> Chargement...</> : <><Download className="h-3 w-3" /> Charger les modeles</>}
               </Button>
             </div>
-            {availableModels.length > 0 && (
+            {loadModelsFromUrl && availableModels.length > 0 && (
               <p className="text-sm text-green-600 font-medium">{availableModels.length} modele(s) trouve(s)</p>
             )}
             {fetchingModels && <Skeleton className="h-4 w-48" />}
@@ -568,26 +684,78 @@ return (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="defaultModel">Modele principal (chat) *</Label>
-              {availableModels.length > 0 ? (
-                <select id="defaultModel" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={form.defaultModel} onChange={(e) => handleFieldChange("defaultModel", e.target.value)}>
-                  <option value="">— Choisir un modele —</option>
-                  {availableModels.filter((m) => !m.id.includes("embed")).map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
+              {shouldUseDefaultModelSelect ? (
+                <select
+                  id="defaultModel"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                  value={form.defaultModel}
+                  onChange={(e) => handleFieldChange("defaultModel", e.target.value)}
+                  disabled={chatModelOptions.length === 0}
+                >
+                  {chatModelOptions.length === 0 ? (
+                    <option value={form.defaultModel || ""}>{fetchingModels ? "Chargement des modèles..." : "Chargez les modèles depuis l'URL"}</option>
+                  ) : (
+                    <>
+                      <option value="">— Choisir un modele chat —</option>
+                      {form.defaultModel && !hasDefaultModelInList && (
+                        <option value={form.defaultModel}>Valeur actuelle : {form.defaultModel}</option>
+                      )}
+                      {chatModelOptions.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
+                    </>
+                  )}
                 </select>
               ) : (
                 <Input id="defaultModel" placeholder="mistral-medium" value={form.defaultModel} onChange={(e) => handleFieldChange("defaultModel", e.target.value)} />
               )}
+              <label htmlFor="defaultModelFromUrl" className="flex items-start gap-2 text-xs text-muted-foreground">
+                <input
+                  id="defaultModelFromUrl"
+                  type="checkbox"
+                  checked={useDefaultModelFromUrl}
+                  disabled={!loadModelsFromUrl}
+                  onChange={(event) => handleDefaultModelSourceChange(event.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-input accent-primary disabled:opacity-50"
+                />
+                <span>Utiliser la liste chargée depuis l&apos;URL du provider.</span>
+              </label>
               <p className="text-xs text-muted-foreground">Modele utilise pour les analyses d&apos;impact et la generation de documents. Privilegiez un modele rapide et fiable.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="embeddingModel">Modele d&apos;embedding (optionnel)</Label>
-              {availableModels.length > 0 ? (
-                <select id="embeddingModel" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={form.embeddingModel || ""} onChange={(e) => handleFieldChange("embeddingModel", e.target.value || undefined as any)}>
-                  <option value="">— Aucun —</option>
-                  {availableModels.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
+              {shouldUseEmbeddingModelSelect ? (
+                <select
+                  id="embeddingModel"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                  value={form.embeddingModel || ""}
+                  onChange={(e) => handleFieldChange("embeddingModel", e.target.value)}
+                  disabled={embeddingModelOptions.length === 0}
+                >
+                  {embeddingModelOptions.length === 0 ? (
+                    <option value={form.embeddingModel || ""}>{fetchingModels ? "Chargement des modèles..." : "Chargez les modèles depuis l'URL"}</option>
+                  ) : (
+                    <>
+                      <option value="">— Aucun embedding —</option>
+                      {form.embeddingModel && !hasEmbeddingModelInList && (
+                        <option value={form.embeddingModel}>Valeur actuelle : {form.embeddingModel}</option>
+                      )}
+                      {embeddingModelOptions.map((m) => <option key={m.id} value={m.id}>{m.id}</option>)}
+                    </>
+                  )}
                 </select>
               ) : (
                 <Input id="embeddingModel" placeholder="Optionnel" value={form.embeddingModel || ""} onChange={(e) => handleFieldChange("embeddingModel", e.target.value)} />
               )}
+              <label htmlFor="embeddingModelFromUrl" className="flex items-start gap-2 text-xs text-muted-foreground">
+                <input
+                  id="embeddingModelFromUrl"
+                  type="checkbox"
+                  checked={useEmbeddingModelFromUrl}
+                  disabled={!loadModelsFromUrl}
+                  onChange={(event) => handleEmbeddingModelSourceChange(event.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-input accent-primary disabled:opacity-50"
+                />
+                <span>Utiliser la liste chargée depuis l&apos;URL du provider.</span>
+              </label>
               <p className="text-xs text-muted-foreground">Utilise pour la recherche semantique vectorielle. Si non renseigne, seule la recherche plein-texte sera disponible.</p>
             </div>
           </div>
@@ -642,6 +810,24 @@ return (
                   <p className="text-xs text-muted-foreground">Permet au modele d&apos;appeler des fonctions externes. Non utilise actuellement.</p>
                 </div>
                 <Switch id="toolCalling" checked={form.toolCalling} onCheckedChange={(v) => handleFieldChange("toolCalling", v)} />
+              </div>
+              <div className="grid gap-2 md:grid-cols-[1fr_180px] md:items-center">
+                <div className="space-y-0.5">
+                  <Label htmlFor="thinkingEffort">Thinking du chat</Label>
+                  <p className="text-xs text-muted-foreground">Choisissez l&apos;effort de raisonnement envoyé au modèle chat. Laissez désactivé si le provider refuse ce paramètre.</p>
+                </div>
+                <select
+                  id="thinkingEffort"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={form.thinkingEffort}
+                  onChange={(event) => handleFieldChange("thinkingEffort", event.target.value)}
+                >
+                  {THINKING_EFFORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">

@@ -11,6 +11,7 @@ export class GenerateDocumentJob implements JobHandler {
     const documentType = payload.documentType as string
     const changeId = payload.changeId as string
     const projectId = payload.projectId as string
+    const templateId = payload.templateId as string | undefined
 
     if (!analysisId || !documentType || !changeId || !projectId) {
       return { success: false, error: "Paramètres manquants: analysisId, documentType, changeId, projectId" }
@@ -22,6 +23,7 @@ export class GenerateDocumentJob implements JobHandler {
       changeId,
       projectId,
       orgId: job.orgId,
+      templateId,
     })
 
     if (result.success) {

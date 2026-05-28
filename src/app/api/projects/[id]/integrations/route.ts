@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
-import { auth } from "@/lib/auth/auth"
-import { encryptConfig } from "@/lib/integrations/integration-service"
+import { INTEGRATION_MANAGER_ROLES, requireApiRole } from "@/lib/auth/api-authorization"
 import { z } from "zod"
-import type { IntegrationType } from "@prisma/client"
+import type { IntegrationType, Prisma } from "@prisma/client"
 
 // ─── Schema de liaison projet ───
 const linkIntegrationSchema = z.object({
@@ -22,15 +21,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth()
-    if (!session?.user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-    }
-
-    const orgId = (session.user as any).orgId
-    if (!orgId) {
-      return NextResponse.json({ error: "Organisation non trouvée" }, { status: 400 })
-    }
+    const authz = await requireApiRole(INTEGRATION_MANAGER_ROLES)
+    if ("response" in authz) return authz.response
+    const orgId = authz.orgId
 
     const { id: projectId } = await params
 
@@ -45,6 +38,18 @@ export async function GET(
     const integrations = await prisma.integration.findMany({
       where: { projectId, orgId },
       orderBy: { type: "asc" },
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        status: true,
+        projectId: true,
+        orgId: true,
+        lastSyncAt: true,
+        errorMessage: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     })
 
     // Récupérer aussi les intégrations centrales pour savoir ce qui est disponible
@@ -68,15 +73,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth()
-    if (!session?.user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-    }
-
-    const orgId = (session.user as any).orgId
-    if (!orgId) {
-      return NextResponse.json({ error: "Organisation non trouvée" }, { status: 400 })
-    }
+    const authz = await requireApiRole(INTEGRATION_MANAGER_ROLES)
+    if ("response" in authz) return authz.response
+    const orgId = authz.orgId
 
     const { id: projectId } = await params
 
@@ -153,7 +152,7 @@ export async function POST(
         type: integrationType as IntegrationType,
         name,
         status: "CONNECTED",
-        config: projectConfig as any,
+        config: projectConfig as Prisma.InputJsonValue,
         projectId,
         orgId,
       },
@@ -172,15 +171,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth()
-    if (!session?.user) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-    }
-
-    const orgId = (session.user as any).orgId
-    if (!orgId) {
-      return NextResponse.json({ error: "Organisation non trouvée" }, { status: 400 })
-    }
+    const authz = await requireApiRole(INTEGRATION_MANAGER_ROLES)
+    if ("response" in authz) return authz.response
+    const orgId = authz.orgId
 
     const { id: projectId } = await params
     const integrationId = req.nextUrl.searchParams.get("integrationId")

@@ -7,6 +7,7 @@ import {
   FileText,
   Search,
   Plus,
+  Upload,
   ExternalLink,
   CheckCircle2,
   Clock,
@@ -108,12 +109,20 @@ export default async function DocumentsPage({
             Documentation générée par IA pour vos changements
           </p>
         </div>
-        <Button asChild>
-          <Link href="/documents/new">
-            <Plus className="h-4 w-4" />
-            Nouveau document
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/documents/import">
+              <Upload className="h-4 w-4" />
+              Importer
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/documents/new">
+              <Plus className="h-4 w-4" />
+              Nouveau document
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Filtres */}
@@ -270,7 +279,7 @@ export default async function DocumentsPage({
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-sm text-muted-foreground">
-                            {doc.project.name}
+                            {doc.project?.name ?? "Entreprise"}
                           </span>
                         </td>
                         <td className="px-4 py-3">

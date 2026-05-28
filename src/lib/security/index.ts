@@ -1,3 +1,5 @@
+import { sanitizeAIInput as sanitizePromptInput } from "./prompt-guard"
+
 export { checkRateLimit, getRateLimitConfig, rateLimitConfigs } from "./rate-limit"
 export type { RateLimitConfig } from "./rate-limit"
 export { getSecurityHeaders, applySecurityHeaders } from "./headers"
@@ -20,6 +22,5 @@ export {
 
 // Alias pour compatibilite avec code existant
 export const detectInjection = (text: string) => {
-  const { sanitizeAIInput } = require("./prompt-guard")
-  return sanitizeAIInput(text)
+  return sanitizePromptInput(text)
 }

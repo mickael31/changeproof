@@ -42,6 +42,7 @@ export interface AIProviderFormData {
   streaming: boolean
   jsonMode: boolean
   toolCalling: boolean
+  thinkingEffort: "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
   isActive: boolean
 }
 
@@ -54,6 +55,15 @@ export interface AnalysisInput {
   oldDocumentation?: string
   newDocumentation?: string
   developerComments?: string
+}
+
+export interface AnalysisPromptOverride {
+  systemPrompt?: string
+  userPrompt?: string
+}
+
+export interface AnalysisRequest extends AnalysisInput {
+  promptOverride?: AnalysisPromptOverride
 }
 
 export interface AIStructuredResult {

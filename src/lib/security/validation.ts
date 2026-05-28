@@ -41,6 +41,8 @@ export const analysisInputSchema = z.object({
   { message: "Au moins un champ doit etre rempli" }
 )
 
+const aiThinkingEffortSchema = z.enum(["off", "minimal", "low", "medium", "high", "xhigh"])
+
 export const aiProviderCreateSchema = z.object({
   name: z.string().min(1).max(200),
   type: z.string().default("openai_compatible"),
@@ -54,6 +56,8 @@ export const aiProviderCreateSchema = z.object({
   streaming: z.boolean().default(false),
   jsonMode: z.boolean().default(true),
   toolCalling: z.boolean().default(false),
+  thinking: z.boolean().optional(),
+  thinkingEffort: aiThinkingEffortSchema.default("off"),
   isActive: z.boolean().default(true),
 })
 

@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
   }
 
   const orgId = (session.user as any).orgId
+  const userId = (session.user as { id?: string }).id
 
   try {
     const body = await req.json()
@@ -27,6 +28,8 @@ export async function POST(req: NextRequest) {
       changeId: body.changeId,
       projectId: body.projectId,
       orgId,
+      userId,
+      templateId: body.templateId,
       title: body.title,
     })
 

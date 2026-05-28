@@ -1,58 +1,66 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth/auth"
+import { ADMIN_ROLES, requireApiRole } from "@/lib/auth/api-authorization"
 import { prisma } from "@/lib/db/prisma"
 import { encrypt } from "@/lib/utils/crypto"
 import { AIAnalysisService } from "@/lib/ai/analysis-service"
 import { aiProviderCreateSchema, aiProviderUpdateSchema } from "@/lib/security/validation"
+import { validateExternalHttpUrl } from "@/lib/security/url"
+import { ZodError } from "zod"
 
-export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorise" }, { status: 401 })
+const safeProviderSelect = {
+  id: true,
+  name: true,
+  type: true,
+  baseUrl: true,
+  defaultModel: true,
+  embeddingModel: true,
+  timeout: true,
+  maxTokens: true,
+  temperature: true,
+  streaming: true,
+  jsonMode: true,
+  toolCalling: true,
+  thinking: true,
+  thinkingEffort: true,
+  isActive: true,
+  lastTestAt: true,
+  lastTestSuccess: true,
+  createdAt: true,
+  updatedAt: true,
+}
 
-  const orgId = (session.user as any).orgId
+export async function GET() {
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
 
   const providers = await prisma.aIProviderConfig.findMany({
     where: { organizationId: orgId },
     orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      baseUrl: true,
-      defaultModel: true,
-      embeddingModel: true,
-      timeout: true,
-      maxTokens: true,
-      temperature: true,
-      streaming: true,
-      jsonMode: true,
-      toolCalling: true,
-      isActive: true,
-      lastTestAt: true,
-      lastTestSuccess: true,
-      createdAt: true,
-      updatedAt: true,
-      // Ne JAMAIS inclure encryptedApiKey
-    },
+    select: safeProviderSelect,
   })
 
   return NextResponse.json({ data: providers })
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorise" }, { status: 401 })
-
-  const orgId = (session.user as any).orgId
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
 
   try {
     const body = await req.json()
 
     // Valider
     const validated = aiProviderCreateSchema.parse(body)
+    const baseUrl = validateExternalHttpUrl(validated.baseUrl)
+    if (!baseUrl.ok) {
+      return NextResponse.json({ error: baseUrl.error }, { status: 400 })
+    }
 
     // Chiffrer la cle API
     const encryptedApiKey = encrypt(validated.apiKey)
+    const thinkingEffort = body.thinkingEffort ?? (validated.thinking ? "medium" : validated.thinkingEffort)
 
     // Si ce provider est actif, desactiver les autres
     if (validated.isActive) {
@@ -67,7 +75,7 @@ export async function POST(req: NextRequest) {
         organizationId: orgId,
         name: validated.name,
         type: validated.type,
-        baseUrl: validated.baseUrl,
+        baseUrl: baseUrl.url,
         encryptedApiKey,
         defaultModel: validated.defaultModel,
         embeddingModel: validated.embeddingModel || null,
@@ -77,17 +85,18 @@ export async function POST(req: NextRequest) {
         streaming: validated.streaming,
         jsonMode: validated.jsonMode,
         toolCalling: validated.toolCalling,
+        thinking: thinkingEffort !== "off",
+        thinkingEffort,
         isActive: validated.isActive,
       },
+      select: safeProviderSelect,
     })
 
-    // Retourner sans la cle
-    const { encryptedApiKey: _, ...safeProvider } = provider
-    return NextResponse.json({ data: safeProvider }, { status: 201 })
-  } catch (error: any) {
-    if (error?.name === "ZodError") {
+    return NextResponse.json({ data: provider }, { status: 201 })
+  } catch (error: unknown) {
+    if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: "Validation echouee", details: error.issues || error.errors },
+        { error: "Validation echouee", details: error.issues },
         { status: 400 },
       )
     }
@@ -96,10 +105,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorise" }, { status: 401 })
-
-  const orgId = (session.user as any).orgId
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const { searchParams } = new URL(req.url)
   const testConnection = searchParams.get("testConnection") === "true"
 
@@ -107,6 +115,16 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json()
 
     if (testConnection) {
+      if (!body.id) {
+        return NextResponse.json({ error: "ID requis" }, { status: 400 })
+      }
+      const existing = await prisma.aIProviderConfig.findFirst({
+        where: { id: body.id, organizationId: orgId },
+        select: { id: true },
+      })
+      if (!existing) {
+        return NextResponse.json({ error: "Provider introuvable" }, { status: 404 })
+      }
       const result = await AIAnalysisService.testConnection(body.id)
       return NextResponse.json(result)
     }
@@ -114,12 +132,25 @@ export async function PATCH(req: NextRequest) {
     const validated = aiProviderUpdateSchema.parse(body)
 
     // Si apiKey fournie, la chiffrer
-    const updateData: any = { ...validated }
-    delete updateData.id
+    const updateData: Record<string, unknown> = { ...validated }
     delete updateData.apiKey
+
+    if (validated.baseUrl) {
+      const baseUrl = validateExternalHttpUrl(validated.baseUrl)
+      if (!baseUrl.ok) {
+        return NextResponse.json({ error: baseUrl.error }, { status: 400 })
+      }
+      updateData.baseUrl = baseUrl.url
+    }
 
     if (validated.apiKey) {
       updateData.encryptedApiKey = encrypt(validated.apiKey)
+    }
+
+    if (validated.thinkingEffort) {
+      updateData.thinking = validated.thinkingEffort !== "off"
+    } else if (validated.thinking !== undefined) {
+      updateData.thinkingEffort = validated.thinking ? "medium" : "off"
     }
 
     // Si active, desactiver les autres
@@ -141,14 +172,14 @@ export async function PATCH(req: NextRequest) {
     const provider = await prisma.aIProviderConfig.update({
       where: { id: body.id },
       data: updateData,
+      select: safeProviderSelect,
     })
 
-    const { encryptedApiKey: _, ...safeProvider } = provider
-    return NextResponse.json({ data: safeProvider })
-  } catch (error: any) {
-    if (error?.name === "ZodError") {
+    return NextResponse.json({ data: provider })
+  } catch (error: unknown) {
+    if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: "Validation echouee", details: error.issues || error.errors },
+        { error: "Validation echouee", details: error.issues },
         { status: 400 },
       )
     }
@@ -157,10 +188,9 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorise" }, { status: 401 })
-
-  const orgId = (session.user as any).orgId
+  const authz = await requireApiRole(ADMIN_ROLES)
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const { searchParams } = new URL(req.url)
   const id = searchParams.get("id")
 

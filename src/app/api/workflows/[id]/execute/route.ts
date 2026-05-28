@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth/auth"
-import { startWorkflow, completeStep, getExecutions } from "@/lib/workflow/workflow-engine"
+import { requireApiSession } from "@/lib/auth/api-authorization"
 
 // POST /api/workflows/[id]/execute — Démarre une exécution manuelle
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  const orgId = (session.user as any).orgId as string
+  const authz = await requireApiSession()
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const { id: workflowId } = await params
 
   const body = await req.json()
@@ -42,7 +41,6 @@ export async function POST(
     },
   })
 
-  const { buildExecutionResult } = await import("@/lib/workflow/workflow-engine")
   // Fallback simple
   const result = {
     executionId: execution.id,
@@ -73,13 +71,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
+  const authz = await requireApiSession()
+  if ("response" in authz) return authz.response
+  const orgId = authz.orgId
   const { id } = await params
 
   const { prisma } = await import("@/lib/db/prisma")
-  const execution = await prisma.workflowExecution.findUnique({
-    where: { id },
+  const execution = await prisma.workflowExecution.findFirst({
+    where: { id, orgId },
     include: {
       workflow: {
         include: { steps: { orderBy: { order: "asc" } } },

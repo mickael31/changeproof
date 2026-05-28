@@ -1,40 +1,20 @@
 import type { AIMessage } from "./types"
+import { DEFAULT_SEARCH_SYSTEM_PROMPT } from "./default-prompt-templates"
 import { prisma } from "@/lib/db/prisma"
 
 interface SearchContext {
   recentChanges: { title: string; source: string; date: string }[]
-  documents: { title: string; type: string; date: string }[]
+  documents: { title: string; type: string; date: string; excerpt?: string }[]
   analyses: { summary: string; confidence: number }[]
   tickets: { id: string; title: string }[]
 }
-
-const SEARCH_SYSTEM_PROMPT = [
-  "Tu es un assistant de recherche pour une plateforme de traçabilité de changements logiciels (ChangeProof AI).",
-  "",
-  "## CONTEXTE",
-  "Tu as accès aux changements récents, documents générés, analyses IA et tickets du projet.",
-  "Utilise UNIQUEMENT les informations fournies dans le contexte ci-dessous.",
-  "",
-  "## RÈGLES",
-  "1. Si l'information demandée n'est pas dans le contexte, dis-le clairement.",
-  "2. Cite TOUJOURS tes sources (titre du ticket, document, changement).",
-  "3. Si plusieurs sources se contredisent, signale-le.",
-  "4. Réponds en français, de manière concise et structurée.",
-  "5. Pour chaque affirmation, indique le niveau de confiance (ÉLEVÉ/MOYEN/FAIBLE).",
-  "",
-  "## FORMAT DE RÉPONSE",
-  "1. **Réponse synthétique** (2-4 phrases)",
-  "2. **Sources** (liste des éléments utilisés)",
-  "3. **Détails** (si pertinent)",
-  "4. **Niveau de confiance global**",
-].join("\n")
 
 export async function buildEnrichedSearchPrompt(
   query: string,
   context: SearchContext,
   orgId?: string,
 ): Promise<AIMessage[]> {
-  let systemPrompt = SEARCH_SYSTEM_PROMPT
+  let systemPrompt = DEFAULT_SEARCH_SYSTEM_PROMPT
 
   // Récupérer le template personnalisé si disponible
   if (orgId) {
@@ -72,6 +52,9 @@ function buildContextBlock(context: SearchContext): string {
     parts.push("\n### Documents")
     context.documents.forEach((d) => {
       parts.push(`- [${d.type}] ${d.title} (${d.date})`)
+      if (d.excerpt) {
+        parts.push(`  Extrait: ${d.excerpt}`)
+      }
     })
   }
 

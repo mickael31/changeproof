@@ -79,6 +79,21 @@ describe("prompt-builder - buildAnalysisPrompt", () => {
     expect(userContent).not.toContain("(diff tronqué)")
     expect(userContent).toContain("diff --short")
   })
+
+  it("devrait utiliser un prompt personnalise pour une analyse ponctuelle", async () => {
+    const result = await buildAnalysisPrompt(
+      { jiraTicket: "PROJ-789" },
+      undefined,
+      {
+        systemPrompt: "Tu es un analyste qualite.",
+        userPrompt: "Analyse uniquement PROJ-789 avec un angle produit.",
+      },
+    )
+
+    expect(result[0].content).toContain("Tu es un analyste qualite.")
+    expect(result[0].content).toContain("Structure de réponse obligatoire")
+    expect(result[1].content).toBe("Analyse uniquement PROJ-789 avec un angle produit.")
+  })
 })
 
 describe("prompt-builder - buildSearchPrompt", () => {

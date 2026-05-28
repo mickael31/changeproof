@@ -4,6 +4,9 @@ import { JiraConnector } from "./jira"
 import { GitHubConnector } from "./github"
 import { GitLabConnector } from "./gitlab"
 import { ConfluenceConnector } from "./confluence"
+import { validateExternalHttpUrl } from "@/lib/security/url"
+import { encrypt } from "@/lib/utils/crypto"
+import { randomBytes } from "crypto"
 import type { JiraConfig } from "./jira"
 import type { GitHubConfig } from "./github"
 import type { GitLabConfig } from "./gitlab"
@@ -25,6 +28,36 @@ export type IntegrationConfigMap = {
   BITBUCKET: Record<string, unknown>
   SHAREPOINT: Record<string, unknown>
   TEAMS: Record<string, unknown>
+}
+
+const URL_FIELDS_BY_TYPE: Partial<Record<IntegrationType, string[]>> = {
+  JIRA: ["baseUrl"],
+  GITLAB: ["baseUrl"],
+  CONFLUENCE: ["baseUrl"],
+  AZURE_DEVOPS: ["baseUrl"],
+  SHAREPOINT: ["siteUrl"],
+  TEAMS: ["webhookUrl"],
+}
+
+export function validateIntegrationUrls(
+  type: IntegrationType,
+  config: Record<string, unknown>,
+): { ok: true; config: Record<string, unknown> } | { ok: false; error: string } {
+  const fields = URL_FIELDS_BY_TYPE[type] ?? []
+  const normalized = { ...config }
+
+  for (const field of fields) {
+    const value = normalized[field]
+    if (typeof value !== "string" || value.length === 0) continue
+
+    const result = validateExternalHttpUrl(value)
+    if (!result.ok) {
+      return { ok: false, error: `${field}: ${result.error}` }
+    }
+    normalized[field] = result.url
+  }
+
+  return { ok: true, config: normalized }
 }
 
 /**
@@ -71,7 +104,6 @@ export function encryptConfig(
   type: IntegrationType,
   config: Record<string, unknown>,
 ): Record<string, unknown> {
-  const { encrypt } = require("@/lib/utils/crypto")
   const encrypted = { ...config }
 
   switch (type) {
@@ -213,7 +245,6 @@ export const INTEGRATION_FIELDS: Record<string, { name: string; label: string; t
  * Génère un secret webhook aléatoire (32 caractères hex)
  */
 export function generateWebhookSecret(): string {
-  const { randomBytes } = require("crypto")
   return randomBytes(32).toString("hex")
 }
 

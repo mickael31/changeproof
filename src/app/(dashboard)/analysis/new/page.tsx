@@ -26,7 +26,7 @@ import {
   BrainCircuit,
   Eye,
 } from "lucide-react"
-import type { AnalysisInput, AIStructuredResult } from "@/types"
+import type { AnalysisInput, AnalysisRequest, AIStructuredResult } from "@/types"
 
 const FIELD_DEFS: { key: keyof AnalysisInput; label: string; placeholder: string; icon: React.ElementType }[] = [
   {
@@ -114,7 +114,7 @@ function ResultCard({ result, isMock }: { result: AIStructuredResult; isMock?: b
   const toggle = (section: string) =>
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }))
 
-  const SectionToggle = ({ id, label, count }: { id: string; label: string; count?: number }) => (
+  const renderSectionToggle = (id: string, label: string, count?: number) => (
     <button
       onClick={() => toggle(id)}
       className="flex items-center gap-2 w-full text-left py-2 hover:bg-muted/50 rounded-md px-2 -mx-2 transition-colors"
@@ -160,7 +160,7 @@ function ResultCard({ result, isMock }: { result: AIStructuredResult; isMock?: b
       {/* Summaries */}
       <Card>
         <CardHeader className="pb-2">
-          <SectionToggle id="summary" label="Résumés" />
+          {renderSectionToggle("summary", "Résumés")}
         </CardHeader>
         {expandedSections.summary && (
           <CardContent className="space-y-4">
@@ -186,7 +186,7 @@ function ResultCard({ result, isMock }: { result: AIStructuredResult; isMock?: b
       {/* Impacts */}
       <Card>
         <CardHeader className="pb-2">
-          <SectionToggle id="impacts" label="Impacts détectés" />
+          {renderSectionToggle("impacts", "Impacts détectés")}
         </CardHeader>
         {expandedSections.impacts && (
           <CardContent>
@@ -239,7 +239,7 @@ function ResultCard({ result, isMock }: { result: AIStructuredResult; isMock?: b
       {/* Confirmed / Probable / Unproven */}
       <Card>
         <CardHeader className="pb-2">
-          <SectionToggle id="confirmed" label="Éléments confirmés" count={result.confirmed.length} />
+          {renderSectionToggle("confirmed", "Éléments confirmés", result.confirmed.length)}
         </CardHeader>
         {expandedSections.confirmed && (
           <CardContent>
@@ -263,7 +263,7 @@ function ResultCard({ result, isMock }: { result: AIStructuredResult; isMock?: b
 
       <Card>
         <CardHeader className="pb-2">
-          <SectionToggle id="probable" label="Éléments probables" count={result.probable.length} />
+          {renderSectionToggle("probable", "Éléments probables", result.probable.length)}
         </CardHeader>
         {expandedSections.probable && (
           <CardContent>
@@ -303,7 +303,7 @@ function ResultCard({ result, isMock }: { result: AIStructuredResult; isMock?: b
       {/* Risks */}
       <Card>
         <CardHeader className="pb-2">
-          <SectionToggle id="risks" label="Analyse des risques" />
+          {renderSectionToggle("risks", "Analyse des risques")}
         </CardHeader>
         {expandedSections.risks && (
           <CardContent>
@@ -320,7 +320,7 @@ function ResultCard({ result, isMock }: { result: AIStructuredResult; isMock?: b
       {/* Recommendations */}
       <Card>
         <CardHeader className="pb-2">
-          <SectionToggle id="recommends" label="Recommandations et actions" />
+          {renderSectionToggle("recommends", "Recommandations et actions")}
         </CardHeader>
         {expandedSections.recommends && (
           <CardContent className="space-y-6">
@@ -449,6 +449,17 @@ Structure de réponse obligatoire :
 
   const previewUserPrompt = buildPreviewUserPrompt()
 
+  const handleToggleCustomPrompt = () => {
+    if (useCustomPrompt) {
+      setUseCustomPrompt(false)
+      return
+    }
+
+    setCustomSystemPrompt(previewSystemPrompt)
+    setCustomUserPrompt(previewUserPrompt)
+    setUseCustomPrompt(true)
+  }
+
   const handleChange = (key: keyof AnalysisInput, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
@@ -461,10 +472,22 @@ Structure de réponse obligatoire :
     setIsMock(false)
 
     try {
+      const payload: AnalysisRequest = {
+        ...form,
+        ...(useCustomPrompt
+          ? {
+              promptOverride: {
+                systemPrompt: customSystemPrompt || previewSystemPrompt,
+                userPrompt: customUserPrompt || previewUserPrompt,
+              },
+            }
+          : {}),
+      }
+
       const response = await fetch("/api/ai/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       })
 
       const data = await response.json()
@@ -605,9 +628,9 @@ Structure de réponse obligatoire :
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-medium">System Prompt</Label>
-                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setUseCustomPrompt(!useCustomPrompt)}>
-                        {useCustomPrompt ? "Réinitialiser" : "Personnaliser"}
-                      </Button>
+                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleToggleCustomPrompt}>
+                    {useCustomPrompt ? "Réinitialiser" : "Personnaliser"}
+                  </Button>
                     </div>
                     <Textarea
                       value={useCustomPrompt ? customSystemPrompt : previewSystemPrompt}

@@ -47,10 +47,11 @@ model User {
   validations        Validation[]
   comments           Comment[]
   notifications      Notification[]
-  createdChanges     Change[]          @relation("ChangeCreator")
-  generatedDocuments Document[]        @relation("DocGenerator")
-  documentsValidated Document[]        @relation("DocumentValidator")
+  createdChanges     Change[]           @relation("ChangeCreator")
+  generatedDocuments Document[]         @relation("DocGenerator")
+  documentsValidated Document[]         @relation("DocumentValidator")
   documentVersions   DocumentVersion[]
+  documentTemplates  DocumentTemplate[]
 
   @@map("users")
 }
@@ -124,6 +125,7 @@ model Organization {
   notifications      Notification[]
   auditLogs          AuditLog[]
   promptTemplates    PromptTemplate[]
+  documentTemplates  DocumentTemplate[]
   ciConfig           CiConfig?
   workflowConfigs    WorkflowConfig[]
   workflowExecutions WorkflowExecution[]
@@ -165,6 +167,8 @@ model AIProviderConfig {
   streaming       Boolean      @default(false)
   jsonMode        Boolean      @default(true)
   toolCalling     Boolean      @default(false)
+  thinking        Boolean      @default(false)
+  thinkingEffort  String       @default("off")
   isActive        Boolean      @default(true)
   lastTestAt      DateTime?
   lastTestSuccess Boolean?
@@ -490,8 +494,8 @@ model Document {
   content       String
   status        DocumentStatus @default(DRAFT)
   confidence    Float?
-  projectId     String
-  project       Project        @relation(fields: [projectId], references: [id])
+  projectId     String?
+  project       Project?       @relation(fields: [projectId], references: [id])
   changeId      String?
   change        Change?        @relation(fields: [changeId], references: [id])
   orgId         String
@@ -831,6 +835,25 @@ model PromptTemplate {
   organization Organization @relation(fields: [orgId], references: [id])
 
   @@map("prompt_templates")
+}
+
+model DocumentTemplate {
+  id           String       @id @default(cuid())
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  documentType DocumentType
+  sections     Json
+  tone         String
+  isPublic     Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([orgId, createdAt])
+  @@index([userId])
+  @@map("document_templates")
 }
 
 // ═══════════════════════════════════

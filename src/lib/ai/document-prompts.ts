@@ -263,10 +263,17 @@ interface DocumentGenerationInput {
   additionalNotes?: string
 }
 
+interface DocumentTemplateInstructions {
+  name: string
+  sections: string[]
+  tone: string
+}
+
 export async function buildDocumentPrompt(
   documentType: DocumentType,
   input: DocumentGenerationInput,
   orgId?: string,
+  template?: DocumentTemplateInstructions,
 ): Promise<AIMessage[]> {
   let systemPrompt = DOCUMENT_PROMPTS[documentType] || DOCUMENT_PROMPTS.FUNCTIONAL_SPEC
 
@@ -284,7 +291,7 @@ export async function buildDocumentPrompt(
     }
   }
 
-  const userContext = buildDocumentContext(input)
+  const userContext = buildDocumentContext(input, template)
 
   return [
     { role: "system" as const, content: systemPrompt },
@@ -292,7 +299,7 @@ export async function buildDocumentPrompt(
   ]
 }
 
-function buildDocumentContext(input: DocumentGenerationInput): string {
+function buildDocumentContext(input: DocumentGenerationInput, template?: DocumentTemplateInstructions): string {
   const parts: string[] = [
     "## DONNÉES DU CHANGEMENT",
     "",
@@ -369,6 +376,17 @@ function buildDocumentContext(input: DocumentGenerationInput): string {
   if (input.additionalNotes) {
     parts.push("## NOTES SUPPLÉMENTAIRES")
     parts.push(input.additionalNotes)
+    parts.push("")
+  }
+
+  if (template) {
+    parts.push("## TEMPLATE DOCUMENT À APPLIQUER")
+    parts.push(`**Nom :** ${template.name}`)
+    parts.push(`**Ton :** ${template.tone}`)
+    if (template.sections.length > 0) {
+      parts.push("**Sections attendues :**")
+      template.sections.forEach((section) => parts.push(`- ${section}`))
+    }
     parts.push("")
   }
 

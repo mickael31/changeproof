@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -22,7 +23,9 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { useLocale } from "@/components/layout/locale-provider"
+import { getActiveNavHref } from "@/components/layout/sidebar-active"
 import type { TranslationKey } from "@/lib/i18n/dictionaries"
+import { canAccessPath, type AppRole } from "@/lib/auth/route-access"
 
 interface NavItem {
   labelKey: TranslationKey
@@ -58,7 +61,13 @@ const navItems: NavItem[] = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { data: session } = useSession()
   const { t } = useLocale()
+  const userRole = (session?.user as { role?: AppRole } | undefined)?.role
+  const visibleNavItems = userRole
+    ? navItems.filter((item) => canAccessPath(userRole, item.href))
+    : navItems
+  const activeHref = getActiveNavHref(pathname, visibleNavItems)
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r bg-sidebar-background">
@@ -73,8 +82,8 @@ export function AppSidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+        {visibleNavItems.map((item) => {
+          const isActive = item.href === activeHref
           return (
             <Link
               key={item.href}

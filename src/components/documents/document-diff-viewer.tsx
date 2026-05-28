@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Loader2, ArrowLeft, ArrowRight } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Loader2, ArrowRight } from "lucide-react"
+import { computeDiff } from "@/lib/documents/diff-engine"
 
 interface DiffLine {
   type: "added" | "removed" | "unchanged"
@@ -41,7 +41,6 @@ export function DocumentDiffViewer({ documentId }: { documentId: string }) {
         fetch(`/api/documents/${documentId}/versions?version=${leftVersion}`).then((r) => r.json()),
         fetch(`/api/documents/${documentId}/versions?version=${rightVersion}`).then((r) => r.json()),
       ]).then(([oldDoc, newDoc]) => {
-        const { computeDiff } = require("@/lib/documents/diff-engine")
         setDiff(computeDiff(oldDoc.content || "", newDoc.content || ""))
         setLoading(false)
       })

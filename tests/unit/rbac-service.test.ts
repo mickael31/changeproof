@@ -1,5 +1,20 @@
-import { describe, it, expect } from "vitest"
-import { can } from "@/lib/auth/rbac-service"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+const { mockPrisma } = vi.hoisted(() => ({
+  mockPrisma: {
+    user: {
+      findUnique: vi.fn(),
+    },
+  },
+}))
+
+vi.mock("@/lib/db/prisma", () => ({ prisma: mockPrisma }))
+
+const { can, getAllActions, getAllResources, getUserPermissions } = await import("@/lib/auth/rbac-service")
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 describe("RBAC Service", () => {
   it("ADMIN can manage projects", () => {
@@ -22,5 +37,34 @@ describe("RBAC Service", () => {
 
   it("DEVELOPER can create changes", () => {
     expect(can("DEVELOPER", "create", "change")).toBe(true)
+  })
+
+  it("returns false for unknown roles or unsupported resource policies", () => {
+    expect(can("UNKNOWN" as never, "read", "project")).toBe(false)
+    expect(can("PRODUCT_OWNER", "manage", "apikey")).toBe(false)
+  })
+
+  it("lists supported resources and actions", () => {
+    expect(getAllResources()).toEqual(["project", "change", "document", "integration", "workflow", "report", "apikey"])
+    expect(getAllActions()).toEqual(["create", "read", "update", "delete", "validate", "export", "manage"])
+  })
+
+  it("loads a user's role and default permissions", async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({ role: "TECH_LEAD" })
+
+    const result = await getUserPermissions("user-1")
+
+    expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      select: { role: true },
+    })
+    expect(result.role).toBe("TECH_LEAD")
+    expect(result.permissions.change).toContain("validate")
+  })
+
+  it("throws when user permissions are requested for an unknown user", async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null)
+
+    await expect(getUserPermissions("missing-user")).rejects.toThrow("Utilisateur introuvable")
   })
 })

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -19,7 +20,7 @@ interface ProjectIntegration {
   type: string
   name: string
   status: string
-  config: any
+  config: Record<string, unknown> | null
   lastSyncAt: string | null
   errorMessage: string | null
   createdAt: string
@@ -206,6 +207,10 @@ export default function ProjectIntegrationsTab({ projectId }: { projectId: strin
               const meta = INTEGRATION_META[integration.type]
               const status = statusConfig[integration.status] || statusConfig.MOCKED
               const config = integration.config || {}
+              const projectKey = typeof config.projectKey === "string" ? config.projectKey : null
+              const repo = typeof config.repo === "string" ? config.repo : null
+              const spaceKey = typeof config.spaceKey === "string" ? config.spaceKey : null
+              const projectId = typeof config.projectId === "string" ? config.projectId : null
 
               return (
                 <Card key={integration.id} className="relative overflow-hidden">
@@ -228,10 +233,10 @@ export default function ProjectIntegrationsTab({ projectId }: { projectId: strin
                           {/* Afficher la clé projet/repo si présente */}
                           {config && (
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {config.projectKey && <>Projet : {config.projectKey}</>}
-                              {config.repo && <>Repo : {config.repo}</>}
-                              {config.spaceKey && <>Espace : {config.spaceKey}</>}
-                              {config.projectId && typeof config.projectId === "string" && !config.projectKey && !config.repo && <>ID : {config.projectId}</>}
+                              {projectKey && <>Projet : {projectKey}</>}
+                              {repo && <>Repo : {repo}</>}
+                              {spaceKey && <>Espace : {spaceKey}</>}
+                              {projectId && !projectKey && !repo && <>ID : {projectId}</>}
                             </p>
                           )}
                           {integration.lastSyncAt && (
@@ -350,9 +355,9 @@ export default function ProjectIntegrationsTab({ projectId }: { projectId: strin
             <h4 className="mt-3 font-medium">Aucune intégration</h4>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
               Configurez d&apos;abord vos intégrations dans{" "}
-              <a href="/settings/integrations" className="text-primary hover:underline">
+              <Link href="/settings/integrations" className="text-primary hover:underline">
                 Paramètres &gt; Intégrations
-              </a>
+              </Link>
               , puis revenez ici pour les connecter à ce projet.
             </p>
           </CardContent>

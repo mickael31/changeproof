@@ -121,12 +121,16 @@ export default async function DocumentDetailPage({
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <Badge variant="outline">{typeLabels[document.type]}</Badge>
             <span>·</span>
-            <Link
-              href={`/projects/${document.project.id}`}
-              className="hover:text-foreground transition-colors"
-            >
-              {document.project.name}
-            </Link>
+            {document.project ? (
+              <Link
+                href={`/projects/${document.project.id}`}
+                className="hover:text-foreground transition-colors"
+              >
+                {document.project.name}
+              </Link>
+            ) : (
+              <span>Document d&apos;entreprise</span>
+            )}
             {document.change && (
               <>
                 <span>·</span>

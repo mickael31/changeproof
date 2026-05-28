@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma"
 import { buildDocumentPrompt } from "./document-prompts"
 import { OpenAICompatibleProvider } from "./openai-compatible-provider"
 import { decrypt } from "@/lib/utils/crypto"
+import { normalizeAIThinkingEffort } from "./types"
 import type { AIProviderConfig } from "./types"
 import type { AIStructuredResult } from "@/types"
 import type { DocumentType } from "@prisma/client"
@@ -13,6 +14,8 @@ export class DocumentGenerationService {
     changeId: string
     projectId: string
     orgId: string
+    userId?: string
+    templateId?: string
     title?: string
   }): Promise<{
     success: boolean
@@ -21,7 +24,7 @@ export class DocumentGenerationService {
     error?: string
     tokensUsed?: number
   }> {
-    const { documentType, analysisId, changeId, projectId, orgId } = params
+    const { documentType, analysisId, changeId, projectId, orgId, userId } = params
 
     // 1. Récupérer l'analyse
     const analysis = await prisma.aIAnalysis.findFirst({
@@ -75,7 +78,14 @@ export class DocumentGenerationService {
       },
     }
 
-    const messages = await buildDocumentPrompt(documentType, input, orgId)
+    const documentTemplate = await this.findDocumentTemplate({
+      documentType,
+      orgId,
+      userId,
+      templateId: params.templateId,
+    })
+
+    const messages = await buildDocumentPrompt(documentType, input, orgId, documentTemplate)
 
     // 6. Appeler l'IA
     const providerConfig2: AIProviderConfig = {
@@ -92,6 +102,7 @@ export class DocumentGenerationService {
       streaming: providerConfig.streaming,
       jsonMode: false, // On veut du markdown, pas du JSON
       toolCalling: providerConfig.toolCalling,
+      thinkingEffort: normalizeAIThinkingEffort(providerConfig.thinkingEffort, providerConfig.thinking),
     }
 
     const provider = new OpenAICompatibleProvider(providerConfig2)
@@ -180,5 +191,38 @@ export class DocumentGenerationService {
       { value: "API_DOC", label: "Documentation API" },
       { value: "SECURITY_REPORT", label: "Rapport de sécurité" },
     ]
+  }
+
+  private static async findDocumentTemplate(params: {
+    documentType: DocumentType
+    orgId: string
+    userId?: string
+    templateId?: string
+  }): Promise<{ name: string; sections: string[]; tone: string } | undefined> {
+    const { documentType, orgId, userId, templateId } = params
+    const visibility = userId ? [{ isPublic: true }, { userId }] : [{ isPublic: true }]
+
+    const template = await prisma.documentTemplate.findFirst({
+      where: {
+        orgId,
+        documentType,
+        ...(templateId ? { id: templateId } : {}),
+        OR: visibility,
+      },
+      orderBy: [
+        { isPublic: "asc" },
+        { createdAt: "desc" },
+      ],
+    })
+
+    if (!template) return undefined
+
+    return {
+      name: template.name,
+      sections: Array.isArray(template.sections)
+        ? template.sections.filter((section): section is string => typeof section === "string")
+        : [],
+      tone: template.tone,
+    }
   }
 }

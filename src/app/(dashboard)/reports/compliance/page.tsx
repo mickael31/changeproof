@@ -13,13 +13,21 @@ const STANDARDS = [
   { value: "RGPD", label: "RGPD", icon: FileText, desc: "Règlement général sur la protection des données" },
 ]
 
+type ComplianceReportHistoryItem = {
+  id: string
+  changes?: {
+    standard?: string
+  }
+  createdAt: string
+}
+
 export default function ComplianceReportsPage() {
   const [standard, setStandard] = useState("SOC2")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [history, setHistory] = useState<any[]>([])
+  const [history, setHistory] = useState<ComplianceReportHistoryItem[]>([])
 
   const handleGenerate = async () => {
     if (!startDate || !endDate) {
@@ -87,7 +95,7 @@ export default function ComplianceReportsPage() {
         <CardHeader>
           <CardTitle className="text-lg">Générer un rapport</CardTitle>
           <CardDescription>
-            Sélectionnez la période d'audit et le standard de conformité.
+            Sélectionnez la période d&apos;audit et le standard de conformité.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/db/prisma"
 import type { UserRole } from "@prisma/client"
 
-type Resource = "project" | "change" | "document" | "integration" | "workflow" | "report" | "apikey"
-type Action = "create" | "read" | "update" | "delete" | "validate" | "export" | "manage"
+export type Resource = "project" | "change" | "document" | "integration" | "workflow" | "report" | "apikey"
+export type Action = "create" | "read" | "update" | "delete" | "validate" | "export" | "manage"
 
 const DEFAULT_POLICIES: Record<UserRole, Partial<Record<Resource, Action[]>>> = {
   ADMIN: {
