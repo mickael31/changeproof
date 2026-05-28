@@ -41,7 +41,11 @@ const typeLabels: Record<DocumentType, string> = {
 
 const statusConfig: Record<
   DocumentStatus,
-  { label: string; icon: LucideIcon; variant: "default" | "secondary" | "success" | "warning" | "destructive" }
+  {
+    label: string
+    icon: LucideIcon
+    variant: "default" | "secondary" | "success" | "warning" | "destructive"
+  }
 > = {
   DRAFT: { label: "Brouillon", icon: Edit3, variant: "secondary" },
   IN_REVIEW: { label: "En revue", icon: Eye, variant: "warning" },
@@ -102,12 +106,13 @@ export default async function DocumentsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div
+        data-motion="page-intro"
+        className="flex flex-col gap-4 rounded-lg border bg-card/70 p-5 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between"
+      >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Documents</h1>
-          <p className="text-muted-foreground">
-            Documentation générée par IA pour vos changements
-          </p>
+          <h1 className="page-title">Documents</h1>
+          <p className="page-description mt-2">Documentation générée par IA pour vos changements</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
@@ -145,9 +150,7 @@ export default async function DocumentsPage({
             </div>
 
             <div className="w-[220px]">
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                Type
-              </label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Type</label>
               <select
                 name="type"
                 defaultValue={params.type}
@@ -163,9 +166,7 @@ export default async function DocumentsPage({
             </div>
 
             <div className="w-[180px]">
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                Statut
-              </label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Statut</label>
               <select
                 name="status"
                 defaultValue={params.status}
@@ -200,18 +201,14 @@ export default async function DocumentsPage({
           <CardTitle className="text-base font-semibold">
             {documents.length} document{documents.length !== 1 ? "s" : ""}
           </CardTitle>
-          <CardDescription>
-            Documentation générée automatiquement par l&apos;IA
-          </CardDescription>
+          <CardDescription>Documentation générée automatiquement par l&apos;IA</CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="p-0">
           {documents.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <FileText className="h-12 w-12 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground font-medium">
-                Aucun document trouvé
-              </p>
+              <p className="text-sm text-muted-foreground font-medium">Aucun document trouvé</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Les documents sont générés automatiquement à partir des analyses de changements.
               </p>
@@ -247,10 +244,7 @@ export default async function DocumentsPage({
                     const stCfg = statusConfig[doc.status]
                     const StatusIcon = stCfg.icon
                     return (
-                      <tr
-                        key={doc.id}
-                        className="border-b hover:bg-muted/30 transition-colors"
-                      >
+                      <tr key={doc.id} className="border-b hover:bg-muted/30 transition-colors">
                         <td className="px-6 py-3">
                           <Link
                             href={`/documents/${doc.id}`}
@@ -293,7 +287,7 @@ export default async function DocumentsPage({
                                       ? "bg-green-500"
                                       : doc.confidence >= 0.6
                                         ? "bg-yellow-500"
-                                        : "bg-orange-500"
+                                        : "bg-orange-500",
                                   )}
                                   style={{ width: `${Math.round(doc.confidence * 100)}%` }}
                                 />

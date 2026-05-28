@@ -65,12 +65,42 @@ export default async function DashboardPage() {
   })
 
   const stats = [
-    { label: __("dashboard.stats.projects"), value: projectsCount, icon: FolderKanban, color: "text-blue-500" },
-    { label: __("dashboard.stats.changes"), value: changesCount, icon: GitBranch, color: "text-purple-500" },
-    { label: __("dashboard.stats.documents"), value: documentsCount, icon: FileText, color: "text-green-500" },
-    { label: __("dashboard.stats.inconsistencies"), value: inconsistenciesCount, icon: AlertTriangle, color: "text-orange-500" },
-    { label: __("dashboard.stats.audit_evidence"), value: auditCount, icon: ShieldCheck, color: "text-indigo-500" },
-    { label: __("dashboard.stats.high_risks"), value: highRisksCount, icon: TrendingUp, color: "text-red-500" },
+    {
+      label: __("dashboard.stats.projects"),
+      value: projectsCount,
+      icon: FolderKanban,
+      color: "text-blue-500",
+    },
+    {
+      label: __("dashboard.stats.changes"),
+      value: changesCount,
+      icon: GitBranch,
+      color: "text-purple-500",
+    },
+    {
+      label: __("dashboard.stats.documents"),
+      value: documentsCount,
+      icon: FileText,
+      color: "text-green-500",
+    },
+    {
+      label: __("dashboard.stats.inconsistencies"),
+      value: inconsistenciesCount,
+      icon: AlertTriangle,
+      color: "text-orange-500",
+    },
+    {
+      label: __("dashboard.stats.audit_evidence"),
+      value: auditCount,
+      icon: ShieldCheck,
+      color: "text-indigo-500",
+    },
+    {
+      label: __("dashboard.stats.high_risks"),
+      value: highRisksCount,
+      icon: TrendingUp,
+      color: "text-red-500",
+    },
   ]
 
   // Vérifier si un provider IA est configuré
@@ -81,9 +111,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{__("dashboard.title")}</h1>
-        <p className="text-muted-foreground">
+      <div
+        data-motion="page-intro"
+        className="rounded-lg border bg-card/70 p-5 shadow-sm backdrop-blur"
+      >
+        <h1 className="page-title">{__("dashboard.title")}</h1>
+        <p className="page-description mt-2">
           {__("dashboard.subtitle")}
           {isDemoMode && (
             <Badge variant="warning" className="ml-2 align-middle">
@@ -96,13 +129,15 @@ export default async function DashboardPage() {
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {stats.map((stat) => (
-          <Card key={stat.label}>
+          <Card key={stat.label} className="overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
+                <stat.icon className={`h-4 w-4 ${stat.color}`} />
+              </span>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+              <div className="metric-value text-3xl font-black">{stat.value}</div>
             </CardContent>
           </Card>
         ))}
@@ -114,11 +149,13 @@ export default async function DashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-warning" />
-              <CardTitle className="text-sm font-medium">{__("dashboard.alerts.high_risks")}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {__("dashboard.alerts.high_risks")}
+              </CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-warning">{highRisksCount}</p>
+            <p className="metric-value text-3xl font-black text-warning">{highRisksCount}</p>
           </CardContent>
         </Card>
 
@@ -126,11 +163,13 @@ export default async function DashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-blue-500" />
-              <CardTitle className="text-sm font-medium">{__("dashboard.alerts.pending_analyses")}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {__("dashboard.alerts.pending_analyses")}
+              </CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-blue-500">{pendingAnalyses}</p>
+            <p className="metric-value text-3xl font-black text-blue-500">{pendingAnalyses}</p>
           </CardContent>
         </Card>
 
@@ -138,11 +177,15 @@ export default async function DashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-purple-500" />
-              <CardTitle className="text-sm font-medium">{__("dashboard.alerts.to_validate")}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {__("dashboard.alerts.to_validate")}
+              </CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-purple-500">{documentsToValidate}</p>
+            <p className="metric-value text-3xl font-black text-purple-500">
+              {documentsToValidate}
+            </p>
           </CardContent>
         </Card>
 
@@ -150,18 +193,22 @@ export default async function DashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <Activity className="h-4 w-4 text-green-500" />
-              <CardTitle className="text-sm font-medium">{__("dashboard.alerts.recent_activity")}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {__("dashboard.alerts.recent_activity")}
+              </CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-green-500">{recentActivity.length}</p>
+            <p className="metric-value text-3xl font-black text-green-500">
+              {recentActivity.length}
+            </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Charts */}
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight mb-4">{__("dashboard.charts.title")}</h2>
+      <div data-motion="section">
+        <h2 className="section-title mb-4">{__("dashboard.charts.title")}</h2>
         <DashboardCharts />
       </div>
 
@@ -186,7 +233,9 @@ export default async function DashboardPage() {
                     <p className="text-sm font-medium">{activity.title}</p>
                     <p className="text-xs text-muted-foreground">
                       {activity.project.name} ·{" "}
-                      {new Date(activity.createdAt).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US")}
+                      {new Date(activity.createdAt).toLocaleDateString(
+                        locale === "fr" ? "fr-FR" : "en-US",
+                      )}
                     </p>
                   </div>
                   <Badge variant="outline">{activity.source}</Badge>

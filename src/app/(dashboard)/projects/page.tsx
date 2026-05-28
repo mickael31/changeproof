@@ -23,7 +23,10 @@ import { formatRelativeDate } from "@/lib/utils"
 import Link from "next/link"
 import type { Project, Team } from "@prisma/client"
 
-type ProjectWithTeam = Project & { team: Team | null; _count: { changes: number; documents: number } }
+type ProjectWithTeam = Project & {
+  team: Team | null
+  _count: { changes: number; documents: number }
+}
 
 const criticalityConfig = {
   LOW: { label: "Basse", color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
@@ -81,10 +84,13 @@ export default async function ProjectsPage({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div
+        data-motion="page-intro"
+        className="flex flex-col gap-4 rounded-lg border bg-card/70 p-5 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between"
+      >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Projets</h1>
-          <p className="text-muted-foreground">Gérez vos projets et leur traçabilité</p>
+          <h1 className="page-title">Projets</h1>
+          <p className="page-description mt-2">Gérez vos projets et leur traçabilité</p>
         </div>
         <Link href="/projects/new">
           <Button className="gap-2">
@@ -98,37 +104,45 @@ export default async function ProjectsPage({
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <Card className="border-muted">
           <CardContent className="p-4 flex items-center gap-3">
-            <FolderKanban className="h-5 w-5 text-blue-500 shrink-0" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+              <FolderKanban className="h-5 w-5 text-blue-500" />
+            </span>
             <div>
               <p className="text-xs text-muted-foreground">Total</p>
-              <p className="text-xl font-semibold">{totalCount}</p>
+              <p className="metric-value text-2xl font-black">{totalCount}</p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-emerald-500/20 bg-emerald-500/5">
           <CardContent className="p-4 flex items-center gap-3">
-            <ShieldCheck className="h-5 w-5 text-emerald-500 shrink-0" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+              <ShieldCheck className="h-5 w-5 text-emerald-500" />
+            </span>
             <div>
               <p className="text-xs text-muted-foreground">Actifs</p>
-              <p className="text-xl font-semibold">{activeCount}</p>
+              <p className="metric-value text-2xl font-black">{activeCount}</p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-slate-500/20 bg-slate-500/5">
           <CardContent className="p-4 flex items-center gap-3">
-            <Clock className="h-5 w-5 text-slate-500 shrink-0" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-500/10">
+              <Clock className="h-5 w-5 text-slate-500" />
+            </span>
             <div>
               <p className="text-xs text-muted-foreground">Brouillons</p>
-              <p className="text-xl font-semibold">{draftCount}</p>
+              <p className="metric-value text-2xl font-black">{draftCount}</p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-zinc-500/20 bg-zinc-500/5">
           <CardContent className="p-4 flex items-center gap-3">
-            <Archive className="h-5 w-5 text-zinc-400 shrink-0" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-500/10">
+              <Archive className="h-5 w-5 text-zinc-400" />
+            </span>
             <div>
               <p className="text-xs text-muted-foreground">Archivés</p>
-              <p className="text-xl font-semibold">{archivedCount}</p>
+              <p className="metric-value text-2xl font-black">{archivedCount}</p>
             </div>
           </CardContent>
         </Card>
@@ -201,7 +215,7 @@ export default async function ProjectsPage({
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <Link key={project.id} href={`/projects/${project.id}`}>
-              <Card className="h-full transition-all hover:shadow-md hover:border-primary/20 cursor-pointer group">
+              <Card className="h-full cursor-pointer overflow-hidden transition-all hover:border-primary/20 hover:shadow-md group">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
@@ -219,10 +233,10 @@ export default async function ProjectsPage({
                         project.criticality === "CRITICAL"
                           ? "text-red-500"
                           : project.criticality === "HIGH"
-                          ? "text-orange-500"
-                          : project.criticality === "MEDIUM"
-                          ? "text-amber-500"
-                          : "text-emerald-500"
+                            ? "text-orange-500"
+                            : project.criticality === "MEDIUM"
+                              ? "text-amber-500"
+                              : "text-emerald-500"
                       }`}
                     />
                   </div>
@@ -230,15 +244,16 @@ export default async function ProjectsPage({
                 <CardContent className="space-y-4">
                   {/* Badges */}
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className={criticalityConfig[project.criticality].color}>
+                    <Badge
+                      variant="outline"
+                      className={criticalityConfig[project.criticality].color}
+                    >
                       {criticalityConfig[project.criticality].label}
                     </Badge>
                     <Badge variant="outline" className={statusConfig[project.status].color}>
                       {statusConfig[project.status].label}
                     </Badge>
-                    {project.team && (
-                      <Badge variant="outline">{project.team.name}</Badge>
-                    )}
+                    {project.team && <Badge variant="outline">{project.team.name}</Badge>}
                   </div>
 
                   {/* Stats */}

@@ -119,10 +119,13 @@ export default async function ChangesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div
+        data-motion="page-intro"
+        className="flex flex-col gap-4 rounded-lg border bg-card/70 p-5 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between"
+      >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Changements</h1>
-          <p className="text-muted-foreground">
+          <h1 className="page-title">Changements</h1>
+          <p className="page-description mt-2">
             Gérez et suivez les changements de votre organisation
           </p>
         </div>
@@ -154,9 +157,7 @@ export default async function ChangesPage({
             </div>
 
             <div className="w-[180px]">
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                Source
-              </label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Source</label>
               <select
                 name="source"
                 defaultValue={params.source}
@@ -172,9 +173,7 @@ export default async function ChangesPage({
             </div>
 
             <div className="w-[200px]">
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                Projet
-              </label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Projet</label>
               <select
                 name="project"
                 defaultValue={params.project}
@@ -218,9 +217,7 @@ export default async function ChangesPage({
           {changes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <GitBranch className="h-12 w-12 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground font-medium">
-                Aucun changement trouvé
-              </p>
+              <p className="text-sm text-muted-foreground font-medium">Aucun changement trouvé</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Importez un changement depuis Jira, GitHub ou créez-en un manuellement.
               </p>
@@ -258,10 +255,7 @@ export default async function ChangesPage({
                   {changes.map((change) => {
                     const analysis = lastAnalysisByChange[change.id]
                     return (
-                      <tr
-                        key={change.id}
-                        className="border-b hover:bg-muted/30 transition-colors"
-                      >
+                      <tr key={change.id} className="border-b hover:bg-muted/30 transition-colors">
                         <td className="px-6 py-3">
                           <Link
                             href={`/changes/${change.id}`}
@@ -290,17 +284,12 @@ export default async function ChangesPage({
                             <div className="flex items-center gap-2">
                               <Badge
                                 variant={
-                                  statusConfig[
-                                    analysis.status as keyof typeof statusConfig
-                                  ]?.variant ?? "secondary"
+                                  statusConfig[analysis.status as keyof typeof statusConfig]
+                                    ?.variant ?? "secondary"
                                 }
                                 className="text-[11px]"
                               >
-                                {
-                                  statusConfig[
-                                    analysis.status as keyof typeof statusConfig
-                                  ]?.label
-                                }
+                                {statusConfig[analysis.status as keyof typeof statusConfig]?.label}
                               </Badge>
                               {analysis.confidence != null && (
                                 <span className="text-xs text-muted-foreground">
@@ -309,9 +298,7 @@ export default async function ChangesPage({
                               )}
                             </div>
                           ) : (
-                            <span className="text-xs text-muted-foreground">
-                              —
-                            </span>
+                            <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
