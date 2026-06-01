@@ -58,10 +58,34 @@ export function can(userRole: UserRole, action: Action, resource: Resource): boo
   return allowed.includes(action)
 }
 
-export async function getUserPermissions(userId: string): Promise<{ role: UserRole; permissions: Partial<Record<Resource, Action[]>> }> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+export async function getUserPermissions(userId: string): Promise<{
+  role: UserRole
+  permissions: Partial<Record<Resource, Action[]>>
+  permissionProfile?: { id: string; name: string } | null
+}> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      role: true,
+      permissionProfile: {
+        select: { id: true, name: true, permissions: true },
+      },
+    },
+  })
   if (!user) throw new Error("Utilisateur introuvable")
-  return { role: user.role, permissions: DEFAULT_POLICIES[user.role] || {} }
+
+  if (user.permissionProfile) {
+    return {
+      role: user.role,
+      permissions: user.permissionProfile.permissions as Partial<Record<Resource, Action[]>>,
+      permissionProfile: {
+        id: user.permissionProfile.id,
+        name: user.permissionProfile.name,
+      },
+    }
+  }
+
+  return { role: user.role, permissions: DEFAULT_POLICIES[user.role] || {}, permissionProfile: null }
 }
 
 export function getAllResources(): Resource[] {

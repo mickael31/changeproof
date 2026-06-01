@@ -23,6 +23,7 @@ import {
   Activity,
   Webhook,
   BookOpen,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 import { useLocale } from "@/components/layout/locale-provider"
@@ -57,6 +58,7 @@ const navItems: NavItem[] = [
   { labelKey: "nav.webhooks", href: "/settings/webhooks", icon: Webhook },
   { labelKey: "nav.ai_config", href: "/settings/ai-provider", icon: Settings },
   { labelKey: "nav.prompts", href: "/settings/prompts", icon: Sparkles },
+  { labelKey: "nav.accounts", href: "/settings/accounts", icon: Users },
   { labelKey: "nav.billing", href: "/settings/billing", icon: CreditCard },
   { labelKey: "nav.quality", href: "/quality", icon: ShieldCheck },
   { labelKey: "nav.portfolio", href: "/portfolio", icon: LayoutDashboard },

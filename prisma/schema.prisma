@@ -28,19 +28,21 @@ enum UserRole {
 }
 
 model User {
-  id             String       @id @default(cuid())
-  name           String?
-  email          String       @unique
-  emailVerified  DateTime?
-  image          String?
-  passwordHash   String?
-  role           UserRole     @default(DEVELOPER)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  teamId         String?
-  team           Team?        @relation(fields: [teamId], references: [id])
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                  String             @id @default(cuid())
+  name                String?
+  email               String             @unique
+  emailVerified       DateTime?
+  image               String?
+  passwordHash        String?
+  role                UserRole           @default(DEVELOPER)
+  organizationId      String
+  organization        Organization       @relation(fields: [organizationId], references: [id])
+  permissionProfileId String?
+  permissionProfile   PermissionProfile? @relation(fields: [permissionProfileId], references: [id], onDelete: SetNull)
+  teamId              String?
+  team                Team?              @relation(fields: [teamId], references: [id])
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   accounts           Account[]
   sessions           Session[]
@@ -53,6 +55,8 @@ model User {
   documentVersions   DocumentVersion[]
   documentTemplates  DocumentTemplate[]
 
+  @@index([organizationId])
+  @@index([permissionProfileId])
   @@map("users")
 }
 
@@ -125,6 +129,7 @@ model Organization {
   notifications      Notification[]
   auditLogs          AuditLog[]
   promptTemplates    PromptTemplate[]
+  permissionProfiles PermissionProfile[]
   documentTemplates  DocumentTemplate[]
   ciConfig           CiConfig?
   workflowConfigs    WorkflowConfig[]
@@ -835,6 +840,23 @@ model PromptTemplate {
   organization Organization @relation(fields: [orgId], references: [id])
 
   @@map("prompt_templates")
+}
+
+model PermissionProfile {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String?
+  permissions Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  users        User[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@map("permission_profiles")
 }
 
 model DocumentTemplate {

@@ -10,7 +10,8 @@ const { mockPrisma } = vi.hoisted(() => ({
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mockPrisma }))
 
-const { can, getAllActions, getAllResources, getUserPermissions } = await import("@/lib/auth/rbac-service")
+const { can, getAllActions, getAllResources, getUserPermissions } =
+  await import("@/lib/auth/rbac-service")
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -45,21 +46,58 @@ describe("RBAC Service", () => {
   })
 
   it("lists supported resources and actions", () => {
-    expect(getAllResources()).toEqual(["project", "change", "document", "integration", "workflow", "report", "apikey"])
-    expect(getAllActions()).toEqual(["create", "read", "update", "delete", "validate", "export", "manage"])
+    expect(getAllResources()).toEqual([
+      "project",
+      "change",
+      "document",
+      "integration",
+      "workflow",
+      "report",
+      "apikey",
+    ])
+    expect(getAllActions()).toEqual([
+      "create",
+      "read",
+      "update",
+      "delete",
+      "validate",
+      "export",
+      "manage",
+    ])
   })
 
   it("loads a user's role and default permissions", async () => {
-    mockPrisma.user.findUnique.mockResolvedValue({ role: "TECH_LEAD" })
+    mockPrisma.user.findUnique.mockResolvedValue({ role: "TECH_LEAD", permissionProfile: null })
 
     const result = await getUserPermissions("user-1")
 
     expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      select: { role: true },
+      select: {
+        role: true,
+        permissionProfile: {
+          select: { id: true, name: true, permissions: true },
+        },
+      },
     })
     expect(result.role).toBe("TECH_LEAD")
     expect(result.permissions.change).toContain("validate")
+  })
+
+  it("uses an assigned permission profile as effective permissions", async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      role: "ADMIN",
+      permissionProfile: {
+        id: "profile-1",
+        name: "Support",
+        permissions: { project: ["read"], report: ["read"] },
+      },
+    })
+
+    const result = await getUserPermissions("user-1")
+
+    expect(result.permissionProfile).toEqual({ id: "profile-1", name: "Support" })
+    expect(result.permissions).toEqual({ project: ["read"], report: ["read"] })
   })
 
   it("throws when user permissions are requested for an unknown user", async () => {

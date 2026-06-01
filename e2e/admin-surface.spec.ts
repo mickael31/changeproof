@@ -21,13 +21,17 @@ const adminRoutes = [
   { path: "/settings/webhooks", heading: /Webhooks/i },
   { path: "/settings/ai-provider", heading: /Configuration IA/i },
   { path: "/settings/prompts", heading: /Prompts/i },
+  { path: "/settings/accounts", heading: /Gestion des comptes/i },
   { path: "/settings/billing", heading: /Abonnement|Facturation/i },
   { path: "/quality", heading: /Qualification|Qualite|Qualité/i },
   { path: "/portfolio", heading: /Portfolio/i },
   { path: "/reports/compliance", heading: /Rapport|Conformite|Conformité/i },
   { path: "/settings/ci", heading: /Pipeline CI\/CD|CI/i },
   { path: "/settings/workflows", heading: /Workflows/i },
-  { path: "/settings/document-templates", heading: /Templates docs|Templates de documents|Modeles|Modèles/i },
+  {
+    path: "/settings/document-templates",
+    heading: /Templates docs|Templates de documents|Modeles|Modèles/i,
+  },
   { path: "/settings/rbac", heading: /Permissions|RBAC/i },
 ]
 

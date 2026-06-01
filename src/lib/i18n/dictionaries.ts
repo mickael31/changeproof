@@ -29,6 +29,7 @@ const fr = {
   "nav.webhooks": "Webhooks",
   "nav.ai_config": "Configuration IA",
   "nav.prompts": "Prompts",
+  "nav.accounts": "Comptes",
   "nav.billing": "Facturation",
   "nav.quality": "Qualification",
   "nav.portfolio": "Portfolio",
@@ -87,7 +88,8 @@ const fr = {
   "dashboard.alerts.recent_activity": "Activité récente",
   "dashboard.charts.title": "Vue analytique",
   "dashboard.activity.title": "Activité récente",
-  "dashboard.activity.empty": "Aucune activité pour le moment. Importez un changement pour commencer.",
+  "dashboard.activity.empty":
+    "Aucune activité pour le moment. Importez un changement pour commencer.",
 }
 
 const en: typeof fr = {
@@ -114,6 +116,7 @@ const en: typeof fr = {
   "nav.webhooks": "Webhooks",
   "nav.ai_config": "AI Configuration",
   "nav.prompts": "Prompts",
+  "nav.accounts": "Accounts",
   "nav.billing": "Billing",
   "nav.quality": "Qualification",
   "nav.portfolio": "Portfolio",

@@ -6,6 +6,7 @@ const adminOnlyLinks = [
   "Webhooks",
   "Configuration IA",
   "Prompts",
+  "Comptes",
   "Pipeline CI/CD",
   "Workflows",
   "Templates docs",
@@ -22,11 +23,15 @@ test.describe("Acces admin et client", () => {
 
     await page.goto("/settings/rbac")
     await expect(page.getByRole("heading", { name: "Permissions RBAC" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Profils de permissions" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Nouveau profil" })).toBeVisible()
     await expectDashboardShell(page)
     await expectNoAppError(page)
   })
 
-  test("client ne voit pas les liens admin, mais garde acces a la facturation", async ({ page }) => {
+  test("client ne voit pas les liens admin, mais garde acces a la facturation", async ({
+    page,
+  }) => {
     await login(page, users.client)
 
     for (const label of adminOnlyLinks) {
